@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f4f0">
+  <meta name="description" content="LANでつながる、あなた専用の画像ライブラリ。">
+  <link rel="icon" href="data:,">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/static/style.css">
+  <title>Luma — Private gallery</title>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div id="auth" class="auth-shell" hidden>
+    <div class="auth-art" aria-hidden="true"><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div><div class="art-orbit orbit-three"></div><div class="art-copy"><span>YOUR OWN LITTLE UNIVERSE</span><h2>好きなものを、<br>好きな距離で。</h2><p>A home for every image.</p></div></div>
+    <main class="auth-content"><a class="brand" href="/"><span class="brand-mark">l</span>Luma<span class="brand-dot">●</span></a><div id="auth-form"></div><p class="auth-foot"><span class="live-dot"></span> あなたのPCから、あなたのLANへ。</p></main>
+  </div>
+
+  <div id="app" class="app-shell" hidden>
+    <button id="sidebar-scrim" class="scrim" aria-label="メニューを閉じる" hidden></button>
+    <aside id="sidebar" class="sidebar">
+      <a class="brand" href="/"><span class="brand-mark">l</span>Luma<span class="brand-dot">●</span></a>
+      <div class="workspace-label"><span class="live-dot"></span> PRIVATE WORKSPACE</div>
+      <div class="nav-caption">ライブラリ</div>
+      <nav id="main-nav" aria-label="ライブラリ">
+        <button class="nav-item active" data-view="all"><span data-icon="grid"></span><span>ライブラリ</span><span id="all-count" class="nav-count">0</span></button>
+        <button class="nav-item" data-view="favorites"><span data-icon="heart"></span><span>お気に入り</span><span id="fav-count" class="nav-count">0</span></button>
+      </nav>
+      <div class="nav-caption caption-actions"><button id="toggle-folders" aria-expanded="true">フォルダ ▾</button><button id="new-folder" class="icon-button small" title="フォルダを作成" aria-label="フォルダを作成"><span data-icon="plus"></span></button></div>
+      <nav id="folder-nav" class="folder-nav" aria-label="フォルダ"></nav>
+      <div class="nav-caption">タグ</div><div id="tag-nav" class="tag-nav"></div>
+      <div class="sidebar-bottom"><div class="storage-card"><span data-icon="harddrive"></span><div><strong id="storage-count">0 images</strong><span id="storage-size">ローカルに保存</span></div><span class="live-dot"></span></div>
+      <button id="settings-button" class="nav-item"><span data-icon="settings"></span><span>設定・アクセス管理</span></button>
+      <button id="logout" class="nav-item muted"><span data-icon="logout"></span><span>ログアウト</span></button></div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar"><div class="topbar-location"><button id="menu-button" class="icon-button mobile-only" aria-label="メニューを開く"><span data-icon="menu"></span></button><span class="breadcrumb-root">ライブラリ</span><span class="breadcrumb-divider">/</span><span id="breadcrumb">ライブラリ</span></div><div class="topbar-right"><span class="connection"><span class="live-dot"></span> LAN CONNECTED</span><button id="scan-button" class="icon-button" title="フォルダを再スキャン" aria-label="フォルダを再スキャン"><span data-icon="refresh"></span></button><span id="avatar" class="avatar">L</span></div></header>
+      <section class="library-section">
+        <div class="page-heading"><div><div class="eyebrow">YOUR PRIVATE COLLECTION</div><h1 id="view-title">ライブラリ<span class="heading-dot">.</span></h1><p id="view-description" hidden></p></div><div class="heading-actions"><button id="upload-button" class="button primary"><span data-icon="plus"></span><span>アップロード</span></button><input id="upload-input" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.tif,.tiff" hidden><button id="select-button" class="button secondary"><span data-icon="checksquare"></span><span>選択</span></button></div></div>
+        <div class="toolbar"><label class="search-box"><span data-icon="search"></span><input id="search" type="search" placeholder="ファイル名・タグで検索" autocomplete="off" aria-label="ファイル名・タグで検索"><kbd>/</kbd></label><div class="toolbar-options"><div class="sort-menu"><button id="sort-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="sort-options"><span data-icon="sort"></span><span id="sort-label">更新が新しい順</span><span class="sort-chevron">⌄</span></button><div id="sort-options" class="sort-options" role="listbox" aria-label="画像の並び順" hidden><div class="sort-caption">並び順</div><button role="option" aria-selected="true" data-sort="newest">更新が新しい順<span>✓</span></button><button role="option" aria-selected="false" data-sort="oldest">更新が古い順<span>✓</span></button><button role="option" aria-selected="false" data-sort="added">追加が新しい順<span>✓</span></button><div class="sort-divider" role="presentation"></div><button role="option" aria-selected="false" data-sort="name">名前 A → Z<span>✓</span></button><button role="option" aria-selected="false" data-sort="name_desc">名前 Z → A<span>✓</span></button><button role="option" aria-selected="false" data-sort="largest">サイズが大きい順<span>✓</span></button></div></div><div class="density-group"><button id="density-comfort" class="icon-button active" aria-label="大きめのグリッド" aria-pressed="true"><span data-icon="grid"></span></button><button id="density-compact" class="icon-button" aria-label="小さめのグリッド" aria-pressed="false"><span data-icon="compact"></span></button></div></div></div>
+        <div class="results-bar"><span><strong id="result-count">0</strong> 枚の画像<span id="scan-status" class="scan-status"></span></span><div id="active-filters"></div><button id="parent-folder" class="button secondary" hidden>上のフォルダへ</button></div>
+        <div id="upload-status" class="upload-status" role="status" hidden></div><div id="gallery" class="gallery" aria-label="画像一覧"></div>
+        <div id="empty-state" class="empty-state" hidden><span class="empty-icon" data-icon="images"></span><div class="eyebrow">ROOM FOR INSPIRATION</div><h2 id="empty-title">ここから、コレクションを。</h2><p id="empty-description">public フォルダに画像を入れると、自動でここに並びます。<br>フォルダごとの追加にも対応しています。</p><button id="empty-scan" class="button primary"><span data-icon="refresh"></span>画像を読み込む</button></div>
+        <div id="load-trigger" class="load-trigger"><button id="load-more" class="button secondary" hidden>さらに読み込む</button><span id="loading" hidden>読み込み中…</span></div>
+        <footer class="library-footer"><span>LUMA / A SPACE OF YOUR OWN</span><span id="footer-status">LOCAL STORAGE · PRIVATE ACCESS</span></footer>
+      </section>
+    </main>
+    <div id="selection-bar" class="selection-bar" hidden><button id="clear-selection" class="icon-button" aria-label="選択を解除"><span data-icon="close"></span></button><strong><span id="selected-count">0</span> 枚を選択</strong><button id="select-loaded" class="button subtle">読込済みを選択</button><div class="selection-actions"><button id="batch-tags" class="button"><span data-icon="tag"></span><span>タグ</span></button><button id="batch-move" class="button"><span data-icon="folder"></span><span>移動</span></button><button id="batch-favorite" class="icon-button" aria-label="選択した画像をお気に入りに追加"><span data-icon="heart"></span></button></div></div>
+  </div>
+
+  <dialog id="viewer" class="viewer"><div class="viewer-layout"><header class="viewer-header"><button id="close-viewer" class="icon-button" aria-label="ビュアーを閉じる"><span data-icon="close"></span></button><div class="viewer-title"><strong id="viewer-name"></strong><span id="viewer-position"></span></div><div class="viewer-actions"><button id="viewer-heart" class="icon-button" aria-label="お気に入りを切り替え"><span data-icon="heart"></span></button><button id="slideshow" class="icon-button" aria-label="スライドショーを開始" title="スライドショー (5秒)"><span data-icon="play"></span></button><button id="fullscreen" class="icon-button" aria-label="全画面表示"><span data-icon="expand"></span></button><button id="info-toggle" class="icon-button" aria-label="画像情報・編集" aria-expanded="false"><span data-icon="info"></span></button></div></header>
+    <div class="viewer-body"><div id="stage" class="stage"><img id="viewer-image" alt="" draggable="false"><div id="viewer-loading" class="viewer-loading" hidden>読み込み中…</div><button id="previous" class="viewer-arrow previous icon-button" aria-label="前の画像"><span data-icon="left"></span></button><button id="next" class="viewer-arrow next icon-button" aria-label="次の画像"><span data-icon="right"></span></button><div class="zoom-controls"><button id="zoom-out" class="icon-button" aria-label="縮小"><span data-icon="minus"></span></button><button id="zoom-reset">フィット</button><button id="zoom-in" class="icon-button" aria-label="拡大"><span data-icon="plus"></span></button><button id="original-toggle" class="quality-button">原寸</button></div></div><aside id="image-info" class="image-info" hidden></aside></div>
+    <footer class="viewer-footer"><span class="viewer-help">スワイプで移動 · ピンチで拡大</span><div id="filmstrip" class="filmstrip"></div><span id="viewer-resolution"></span></footer></div></dialog>
+
+  <dialog id="modal" class="modal"><div class="modal-heading"><div><div class="eyebrow">LUMA WORKSPACE</div><h2 id="modal-title"></h2></div><button id="close-modal" class="icon-button" aria-label="閉じる"><span data-icon="close"></span></button></div><div id="modal-body"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
