@@ -327,7 +327,6 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 .dragging,.dragging *{cursor:grabbing!important}.drag-source{opacity:.35;transform:scale(.97)!important}.dragging .image-card:not(.drag-source):hover{transform:none}
 .drag-ghost{position:fixed;top:0;left:-1000px;z-index:1000;width:230px;display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #d8e0d0;border-radius:14px;background:#fbfcf8;box-shadow:0 14px 35px #1d2b233d;pointer-events:none;transform:rotate(-3deg)}
 .drag-ghost img,.drag-ghost>svg{width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;color:#63775b}.drag-ghost div{min-width:0}.drag-ghost strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.drag-ghost span{display:block;font-size:11px;color:var(--muted);margin-top:6px}
-.drag-hint{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:1001;pointer-events:none;width:max-content;max-width:calc(100vw - 32px);padding:10px 14px;border:1px solid #dbe4d3;border-radius:10px;background:#fcfdf8f5;box-shadow:0 6px 25px #25352125;font-size:12px;color:#405638;overflow-wrap:anywhere}
 .drop-target{box-shadow:0 0 0 5px #78986522;transform:scale(1.025)!important;transition:transform var(--motion-fast),box-shadow var(--motion-fast)}.drop-target .folder-card-open svg{transform:translateY(-6px) rotate(-7deg)}
 .drop-saving{opacity:.6;animation:saving-pulse 700ms ease-in-out infinite alternate}.drop-complete{animation:drop-settle 550ms var(--ease-out)}
 @keyframes panel-enter{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
@@ -337,7 +336,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 @keyframes drop-settle{0%{transform:scale(1.04);box-shadow:0 0 0 7px #78986533}100%{transform:none;box-shadow:0 0 0 0 transparent}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.image-card:hover,.folder-card:hover,.drop-target,.drag-source{transform:none!important}}
 
-.drag-hint.at-top{top:24px;bottom:auto}.dragging .toast{visibility:hidden}
 
 .card-open{-webkit-touch-callout:none;user-select:none}.image-card.selection-press .card-visual{animation:selection-hold 500ms ease-out both}
-@keyframes selection-hold{to{transform:scale(.97);box-shadow:0 0 0 3px #809b6c66}}
+@keyframes selection-hold{to{transform:scale(.97)}}
+
+/* File cards are controls, not selectable document text. */
+#gallery,#gallery *{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#gallery ::selection{background:transparent;color:inherit}

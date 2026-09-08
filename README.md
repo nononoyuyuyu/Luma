@@ -159,6 +159,6 @@ UIからの移動は履歴を記録し、中断後は次回スキャンで復旧
 
 ### UIの動きの設計
 
-操作への反応は130ms、状態変化は220ms、パネル表示は280msを基本にしています。描画負荷を抑えるため主に変形と透明度を使い、動きを減らす設定ではアニメーションを停止します。ドラッグの空白領域は案内を表示し、移動先が指定されなければファイルは移動しません。ブラウザの外側のカーソル表示はOSが制御します。
+操作への反応は130ms、状態変化は220ms、パネル表示は280msを基本にしています。描画負荷を抑えるため主に変形と透明度を使い、動きを減らす設定ではアニメーションを停止します。ドラッグ中は移動先フォルダを強調し、移動先が指定されなければファイルは移動しません。ブラウザの外側のカーソル表示はOSが制御します。
 
 参考： [MDNのドラッグ操作](https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/Drag_operations)、[MDNのドラッグ画像](https://developer.mozilla.org/en-US/docs/Web/API/DataTransfer/setDragImage)、[web.devのアニメーション性能ガイド](https://web.dev/articles/animations-guide)、[動きを減らす設定](https://web.dev/articles/prefers-reduced-motion)。

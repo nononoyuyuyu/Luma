@@ -355,7 +355,7 @@ async function uploadFiles(files,folder){
     if(failures.length){modal('アップロード結果',`<p>${succeeded}件を保存、${failures.length}件は保存できませんでした。</p><ul class="upload-errors">${failures.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`);}else{toast(`${succeeded}件をアップロードしました。`);}
   }finally{uploading=false;$('#upload-button').disabled=false;}
 }
-let dragGhost=null,dragHint=null,dragFrame=0,dragPoint=null,dragSource=null;
+let dragGhost=null,dragFrame=0,dragPoint=null,dragSource=null;
 let pointerDrag=null,suppressDragClickUntil=0;
 let selectionPress=null,selectionPressTimer=null,heldSelectionPointer=null;
 function cancelSelectionPress(){clearTimeout(selectionPressTimer);selectionPress?.card.classList.remove('selection-press');selectionPress=null;}
@@ -412,13 +412,10 @@ function validDrop(target,payload=dragPayload){
   if(payload.folder)return destination!==payload.folder&&!destination.startsWith(payload.folder+'/')&&destination!==parentPath(payload.folder);
   return payload.ids.some(id=>state.items.find(item=>item.id===id)?.folder!==destination);
 }
-function updateDragHint(e,target){
-  if(!dragHint)return;
+function trackDragPoint(e){
   dragPoint={x:e.clientX,y:e.clientY};
-  dragHint.textContent=validDrop(target)?`ここへ移動：${target.dataset.dropFolder||'ライブラリ'}`:target?'このフォルダには移動できません':'移動先のフォルダへドロップ';
-  // Keep guidance away from the native drag preview, including near screen edges.
-  dragHint.classList.toggle('at-top',e.clientY>innerHeight-180);
 }
+
 function dragScroll(){
   if(!dragPayload)return;
   if(dragPoint){const edge=65,y=dragPoint.y;const delta=y<edge?-Math.ceil((edge-y)/5):y>innerHeight-edge?Math.ceil((y-innerHeight+edge)/5):0;
@@ -437,12 +434,11 @@ document.addEventListener('dragstart',e=>{
   const preview=card?.querySelector('img');
   dragGhost.innerHTML=`${preview&&!preview.hidden?`<img src="${esc(preview.src)}" alt="">`:icon('folder')}<div><strong>${esc(folder?folder.dataset.dragFolder.split('/').pop():$('.card-name',card).textContent)}</strong><span>${dragPayload.ids?.length||1}件を移動</span></div>`;
   document.body.append(dragGhost);e.dataTransfer.setDragImage(dragGhost,24,24);
-  dragHint=document.createElement('div');dragHint.className='drag-hint';dragHint.setAttribute('role','status');document.body.append(dragHint);
-  updateDragHint(e,null);document.body.classList.add('dragging');
+  trackDragPoint(e);document.body.classList.add('dragging');
   requestAnimationFrame(()=>{if(dragSource)dragSource.classList.add('drag-source');});
   dragFrame=requestAnimationFrame(dragScroll);
 });
-function clearDrag(){if(pointerDrag?.active)suppressDragClickUntil=performance.now()+400;pointerDrag=null;dragPayload=null;cancelAnimationFrame(dragFrame);dragPoint=null;dragSource=null;dragGhost?.remove();dragHint?.remove();dragGhost=dragHint=null;document.body.classList.remove('dragging');$$('.drop-target,.drag-source').forEach(el=>el.classList.remove('drop-target','drag-source'));$('#app').classList.remove('external-drag');}
+function clearDrag(){if(pointerDrag?.active)suppressDragClickUntil=performance.now()+400;pointerDrag=null;dragPayload=null;cancelAnimationFrame(dragFrame);dragPoint=null;dragSource=null;dragGhost?.remove();dragGhost=null;document.body.classList.remove('dragging');$$('.drop-target,.drag-source').forEach(el=>el.classList.remove('drop-target','drag-source'));$('#app').classList.remove('external-drag');}
 window.addEventListener('blur',clearDrag);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')clearDrag();});
 document.addEventListener('dragend',clearDrag);
@@ -452,7 +448,7 @@ document.addEventListener('dragover',e=>{
   const target=e.target.closest('[data-drop-folder]');
   if(!external&&!dragPayload)return;
   e.preventDefault();e.dataTransfer.dropEffect=external?'copy':'move';
-  updateDragHint(e,target);
+  trackDragPoint(e);
   $$('.drop-target').forEach(el=>el.classList.remove('drop-target'));if(target&&(external||validDrop(target)))target.classList.add('drop-target');
   $('#app').classList.toggle('external-drag',external);
 });
