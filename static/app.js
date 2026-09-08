@@ -356,6 +356,56 @@ async function uploadFiles(files,folder){
   }finally{uploading=false;$('#upload-button').disabled=false;}
 }
 let dragGhost=null,dragHint=null,dragFrame=0,dragPoint=null,dragSource=null;
+let pointerDrag=null,suppressDragClickUntil=0;
+let selectionPress=null,selectionPressTimer=null,heldSelectionPointer=null;
+function cancelSelectionPress(){clearTimeout(selectionPressTimer);selectionPress?.card.classList.remove('selection-press');selectionPress=null;}
+document.addEventListener('pointerdown',e=>{
+  cancelSelectionPress();
+  if(!e.isPrimary||e.button!==0||$('#viewer').open||$('#modal').open)return;
+  const card=e.target.closest('.image-card');
+  if(!card||e.target.closest('.card-menu,.card-select,.card-favorite'))return;
+  selectionPress={card,id:card.dataset.id,x:e.clientX,y:e.clientY,pointerId:e.pointerId};
+  card.classList.add('selection-press');
+  selectionPressTimer=setTimeout(()=>{
+    const press=selectionPress;if(!press)return;
+    heldSelectionPointer=press.pointerId;cancelSelectionPress();pointerDrag=null;
+    state.selecting=true;toggleSelection(press.id);
+    suppressDragClickUntil=performance.now()+1000;
+  },500);
+});
+document.addEventListener('pointermove',e=>{if(selectionPress&&(e.pointerId!==selectionPress.pointerId||Math.hypot(e.clientX-selectionPress.x,e.clientY-selectionPress.y)>10))cancelSelectionPress();});
+document.addEventListener('pointerup',e=>{cancelSelectionPress();if(e.pointerId===heldSelectionPointer){suppressDragClickUntil=performance.now()+400;heldSelectionPointer=null;}});
+document.addEventListener('pointercancel',cancelSelectionPress);
+document.addEventListener('scroll',cancelSelectionPress,true);
+window.addEventListener('blur',cancelSelectionPress);
+document.addEventListener('contextmenu',e=>{if(e.target.closest('.image-card')&&(selectionPress||performance.now()<suppressDragClickUntil))e.preventDefault();});
+// Internal moves use pointer events so the OS never draws a native no-drop cursor.
+document.addEventListener('pointerdown',e=>{
+  suppressDragClickUntil=0;
+  if(e.pointerType!=='mouse'||e.button!==0||$('#modal').open||$('#viewer').open)return;
+  const source=e.target.closest('[data-drag-folder],.image-card');
+  if(!source||e.target.closest('.card-menu,.card-select,.card-favorite,.folder-move-menu'))return;
+  pointerDrag={source,x:e.clientX,y:e.clientY,active:false,transfer:new DataTransfer()};
+});
+document.addEventListener('pointermove',e=>{
+  const drag=pointerDrag;if(!drag)return;
+  if(!drag.active&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6)return;
+  e.preventDefault();
+  if(!drag.active){cancelSelectionPress();drag.active=true;drag.source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:drag.transfer,clientX:e.clientX,clientY:e.clientY}));}
+  if(!dragPayload)return;
+  if(dragGhost){dragGhost.style.left='0';dragGhost.style.top='0';dragGhost.style.transform=`translate(${Math.max(4,Math.min(e.clientX+14,innerWidth-245))}px,${Math.max(4,Math.min(e.clientY+14,innerHeight-95))}px) rotate(-3deg)`;}
+  const target=document.elementFromPoint(e.clientX,e.clientY);
+  target?.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:drag.transfer,clientX:e.clientX,clientY:e.clientY}));
+});
+document.addEventListener('pointerup',e=>{
+  const drag=pointerDrag;pointerDrag=null;if(!drag?.active)return;
+  suppressDragClickUntil=performance.now()+400;
+  const target=document.elementFromPoint(e.clientX,e.clientY);
+  if(target)target.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:drag.transfer,clientX:e.clientX,clientY:e.clientY}));else clearDrag();
+});
+document.addEventListener('pointercancel',()=>{if(pointerDrag)clearDrag();});
+document.addEventListener('click',e=>{if(performance.now()<suppressDragClickUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
+
 function validDrop(target,payload=dragPayload){
   if(!target||!payload)return false;
   const destination=target.dataset.dropFolder;
@@ -376,6 +426,7 @@ function dragScroll(){
   dragFrame=requestAnimationFrame(dragScroll);
 }
 document.addEventListener('dragstart',e=>{
+  if(e.isTrusted){e.preventDefault();return;}
   const folder=e.target.closest('[data-drag-folder]'),card=e.target.closest('.image-card');
   if(folder)dragPayload={folder:folder.dataset.dragFolder};
   else if(card)dragPayload={ids:state.selected.has(card.dataset.id)?[...state.selected]:[card.dataset.id]};
@@ -391,7 +442,7 @@ document.addEventListener('dragstart',e=>{
   requestAnimationFrame(()=>{if(dragSource)dragSource.classList.add('drag-source');});
   dragFrame=requestAnimationFrame(dragScroll);
 });
-function clearDrag(){dragPayload=null;cancelAnimationFrame(dragFrame);dragPoint=null;dragSource=null;dragGhost?.remove();dragHint?.remove();dragGhost=dragHint=null;document.body.classList.remove('dragging');$$('.drop-target,.drag-source').forEach(el=>el.classList.remove('drop-target','drag-source'));$('#app').classList.remove('external-drag');}
+function clearDrag(){if(pointerDrag?.active)suppressDragClickUntil=performance.now()+400;pointerDrag=null;dragPayload=null;cancelAnimationFrame(dragFrame);dragPoint=null;dragSource=null;dragGhost?.remove();dragHint?.remove();dragGhost=dragHint=null;document.body.classList.remove('dragging');$$('.drop-target,.drag-source').forEach(el=>el.classList.remove('drop-target','drag-source'));$('#app').classList.remove('external-drag');}
 window.addEventListener('blur',clearDrag);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')clearDrag();});
 document.addEventListener('dragend',clearDrag);

@@ -139,6 +139,27 @@ def main():
                 expect(img).to_have_js_property('complete', True)
                 assert img.evaluate('(img) => img.naturalWidth > 0')
             assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            # A real touch hold starts selection; subsequent taps add/remove cards.
+            touch_session=mobile.new_cdp_session(phone)
+            box=phone.locator('.card-open').first.bounding_box()
+            x,y=box['x']+box['width']/2,box['y']+box['height']/2
+            touch_session.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+            expect(phone.locator('#selected-count')).to_have_text('1')
+            touch_session.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+            expect(phone.locator('#viewer')).not_to_be_visible()
+            phone.locator('.card-open').nth(1).tap()
+            expect(phone.locator('#selected-count')).to_have_text('2')
+            phone.locator('.card-open').nth(1).tap()
+            expect(phone.locator('#selected-count')).to_have_text('1')
+            phone.screenshot(path=str(root/'long-press-selection.png'))
+            phone.locator('#clear-selection').tap()
+            # Moving the touch cancels the pending hold before selection can fire.
+            first=phone.locator('.card-open').first
+            first.dispatch_event('pointerdown',{'pointerType':'touch','isPrimary':True,'pointerId':42,'button':0,'clientX':100,'clientY':400})
+            first.dispatch_event('pointermove',{'pointerType':'touch','isPrimary':True,'pointerId':42,'clientX':100,'clientY':370})
+            assert phone.evaluate('selectionPress===null')
+            first.dispatch_event('pointercancel',{'pointerType':'touch','pointerId':42})
+            expect(phone.locator('#selection-bar')).to_be_hidden()
             phone.screenshot(path=str(root/'gallery-mobile.png'),full_page=False)
             phone.locator('#sort-button').click()
             expect(phone.locator('#sort-options')).to_be_visible()
@@ -183,7 +204,7 @@ def main():
             expect(page.locator('#upload-status')).to_contain_text('1件をアップロードしました')
             expect(page.locator('.image-card')).to_have_count(5)
             # Drag feedback on blank space must stay a move, while invalid drops do nothing.
-            page.evaluate("document.addEventListener('dragover',e=>{window.lastDropEffect=e.dataTransfer.dropEffect;})")
+            page.evaluate("window.nativeDragStarted=false;document.addEventListener('dragstart',e=>{if(e.isTrusted&&!e.defaultPrevented)window.nativeDragStarted=true;})")
             drag_data=page.evaluate_handle('new DataTransfer()')
             source=page.locator('.image-card').filter(has=page.locator('[title="desktop-upload.png"]'))
             source.dispatch_event('dragstart',{'dataTransfer':drag_data,'clientX':600,'clientY':300})
@@ -203,9 +224,9 @@ def main():
             expect(page.locator('.drag-hint')).to_have_count(0)
             assert (public/'Travel').is_dir()
             page.locator('.image-card').filter(has=page.locator('[title="desktop-upload.png"]')).drag_to(page.locator('.folder-card[data-drop-folder="Artwork"]'))
-            assert page.evaluate('window.lastDropEffect')=='move'
             expect(page.locator('.image-card')).to_have_count(4)
             assert (public/'Artwork/desktop-upload.png').is_file()
+            assert page.evaluate('window.nativeDragStarted') is False
             page.locator('.folder-card[data-drag-folder="Travel"]').drag_to(page.locator('.folder-card[data-drop-folder="Artwork"]'))
             expect(page.locator('.folder-card')).to_have_count(2)
             assert (public/'Artwork/Travel').is_dir()
@@ -300,7 +321,7 @@ def main():
             phone.screenshot(path=str(root/'login-mobile.png'),full_page=True)
             assert not errors, errors
             browser.close()
-        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','mobile upload button video picker handoff','unsupported and disguised files rejected before network upload','drag feedback and Escape cleanup','self folder drop ignored','video thumbnail decoded','reduced motion honored','logout']}
+        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','mobile upload button video picker handoff','unsupported and disguised files rejected before network upload','drag feedback and Escape cleanup','self folder drop ignored','video thumbnail decoded','reduced motion honored','native internal drag disabled','touch hold multi-selection','moving touch cancels hold','logout']}
         (root/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps(report,ensure_ascii=True))
     finally:

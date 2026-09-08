@@ -338,3 +338,6 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.image-card:hover,.folder-card:hover,.drop-target,.drag-source{transform:none!important}}
 
 .drag-hint.at-top{top:24px;bottom:auto}.dragging .toast{visibility:hidden}
+
+.card-open{-webkit-touch-callout:none;user-select:none}.image-card.selection-press .card-visual{animation:selection-hold 500ms ease-out both}
+@keyframes selection-hold{to{transform:scale(.97);box-shadow:0 0 0 3px #809b6c66}}
