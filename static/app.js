@@ -303,6 +303,29 @@ $('#toggle-folders').onclick=()=>{foldersHidden=!foldersHidden;$('#folder-nav').
 $('#upload-button').onclick=()=>$('#upload-input').click();
 $('#upload-input').onchange=safe(async e=>{const files=[...e.target.files];e.target.value='';await uploadFiles(files,state.folder||'');});
 
+// The unrestricted picker opens files; validate locally before any upload request.
+async function validateUploadFile(file){
+  const extension=file.name.split('.').pop().toLowerCase();
+  if(!/^(jpe?g|png|webp|gif|avif|bmp|tiff?|mp4|m4v|mov|webm)$/.test(extension))throw new Error('対応する画像・動画ファイルだけ追加できます。');
+  const isVideo=/^(mp4|m4v|mov|webm)$/.test(extension);
+  if(file.size>(isVideo?1024**3:64*1024*1024))throw new Error(isVideo?'動画は1GiBまでです。':'画像は64MiBまでです。');
+  const bytes=new Uint8Array(await file.slice(0,64).arrayBuffer());
+  const has=(offset,signature)=>signature.every((value,index)=>bytes[offset+index]===value);
+  const text=(offset,value)=>has(offset,Array.from(value,c=>c.charCodeAt(0)));
+  const isBmff=text(4,'ftyp');
+  const valid={
+    jpg:has(0,[255,216,255]),jpeg:has(0,[255,216,255]),
+    png:has(0,[137,80,78,71,13,10,26,10]),gif:text(0,'GIF87a')||text(0,'GIF89a'),
+    webp:text(0,'RIFF')&&text(8,'WEBP'),bmp:text(0,'BM'),
+    tif:has(0,[73,73,42,0])||has(0,[77,77,0,42])||has(0,[73,73,43,0])||has(0,[77,77,0,43]),
+    avif:isBmff&&(text(8,'avif')||text(8,'avis')||Array.from({length:12},(_,i)=>16+i*4).some(i=>text(i,'avif')||text(i,'avis'))),
+    mp4:isBmff,m4v:isBmff,mov:isBmff||text(4,'moov')||text(4,'mdat')||text(4,'wide'),
+    webm:has(0,[26,69,223,163])
+  };
+  valid.tiff=valid.tif;
+  if(!valid[extension])throw new Error('ファイルの内容が画像・動画の形式と一致しません。');
+}
+
 async function uploadFiles(files,folder){
   if(uploading){toast('アップロード完了までお待ちください。');return;}
   if(!files.length)return;
@@ -313,8 +336,7 @@ async function uploadFiles(files,folder){
     for(let i=0;i<files.length;i++){
       const file=files[i];$('#upload-status').textContent=`アップロード中 ${i+1} / ${files.length}：${file.name}`;
       try{
-        const isVideo=/\.(mp4|m4v|mov|webm)$/i.test(file.name);if(file.size>(isVideo?1024**3:64*1024*1024))throw new Error(isVideo?'動画は1GiBまでです。':'画像は64MiBまでです。');
-        if(!/\.(jpe?g|png|webp|gif|avif|bmp|tiff?|mp4|m4v|mov|webm)$/i.test(file.name))throw new Error('対応していない形式です。');
+        await validateUploadFile(file);
         await new Promise((resolve,reject)=>{
           const xhr=new XMLHttpRequest();xhr.open('POST','/api/upload?'+new URLSearchParams({folder,name:file.name}));
           xhr.setRequestHeader('X-Luma-Request','1');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=610000;

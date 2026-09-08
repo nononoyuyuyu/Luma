@@ -246,19 +246,30 @@ def main():
             with phone.expect_file_chooser() as picker_event:
                 phone.locator('#upload-button').click()
             picker=picker_event.value
-            accepted=picker.element.get_attribute('accept').split(',')
-            assert 'image/*' in accepted and 'video/*' in accepted
+            assert picker.element.get_attribute('accept') is None
             picker.set_files({'name':'mobile-video.mp4','mimeType':'video/mp4','buffer':(public/'clip.mp4').read_bytes()})
             expect(phone.locator('#upload-status')).to_contain_text('1件をアップロードしました')
             expect(phone.locator('.image-card').filter(has=phone.locator('[title="mobile-video.mp4"]'))).to_have_count(1)
             assert (public/'mobile-video.mp4').read_bytes()==(public/'clip.mp4').read_bytes()
+            upload_requests=[]
+            phone.on('request',lambda request:upload_requests.append(request.url) if '/api/upload?' in request.url else None)
+            with phone.expect_file_chooser() as rejected_picker:
+                phone.locator('#upload-button').click()
+            rejected_picker.value.set_files([
+                {'name':'notes.txt','mimeType':'text/plain','buffer':b'not media'},
+                {'name':'pretend.mp4','mimeType':'video/mp4','buffer':b'not a video'},
+                {'name':'pretend.png','mimeType':'image/png','buffer':b'not an image'},
+                {'name':'vector.svg','mimeType':'image/svg+xml','buffer':b'<svg/>'}])
+            expect(phone.locator('#upload-status')).to_contain_text('4件は失敗しました')
+            assert upload_requests==[],upload_requests
+            phone.locator('#close-modal').click()
             phone.locator('#menu-button').click()
             phone.locator('#logout').click()
             expect(phone.locator('#username')).to_be_visible()
             phone.screenshot(path=str(root/'login-mobile.png'),full_page=True)
             assert not errors, errors
             browser.close()
-        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','mobile upload button video picker handoff','logout']}
+        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','mobile upload button video picker handoff','unsupported and disguised files rejected before network upload','logout']}
         (root/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps(report,ensure_ascii=True))
     finally:
