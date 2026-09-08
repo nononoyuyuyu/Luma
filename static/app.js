@@ -75,7 +75,7 @@ async function refreshSummary() {
 }
 let lastScan=null;
 async function poll() {
-  if(document.hidden||$('#modal').open)return;
+  if(document.hidden||$('#modal').open||dragPayload)return;
   const before=state.summary?.count;
   const summary=await refreshSummary();
   const changed=lastScan!==null && summary.scan.revision!==lastScan;
@@ -114,8 +114,12 @@ async function loadImages(reset=false) {
 function makeCard(item) {
   const card=document.createElement('article');card.className='image-card'+(state.selected.has(item.id)?' selected':'');card.dataset.id=item.id;
   card.draggable=true;
-  card.innerHTML=`<div class="card-visual"><button class="card-open" aria-label="${esc(item.name)}を開く"><img src="${media(item,'thumb')}" loading="lazy" decoding="async" width="480" height="480" alt="${esc(item.name)}"></button><button class="card-select ${state.selected.has(item.id)?'selected':''}" aria-label="${esc(item.name)}を選択" aria-pressed="${state.selected.has(item.id)}">${icon('check')}</button><button class="card-favorite ${item.favorite?'is-favorite':''}" aria-label="お気に入りを切り替え" aria-pressed="${!!item.favorite}">${icon('heart')}</button>${item.kind==='video'?`<span class="image-badge">▶ ${durationLabel(item.duration)}</span>`:item.animated?'<span class="image-badge">ANIMATED</span>':item.format==='TIFF'?'<span class="image-badge">TIFF</span>':''}</div><div class="card-meta"><span class="card-name" title="${esc(item.name)}">${esc(item.name)}</span><button class="card-menu icon-button" aria-label="${esc(item.name)}の情報・編集">${icon('more')}</button></div><div class="card-subtitle"><span class="card-folder">${esc(item.folder||'ライブラリ')}</span><span>·</span><span>${item.width} × ${item.height}</span>${item.tags.length?`<span>· ${esc(item.tags[0])}</span>`:''}</div>`;
-  $('img',card).addEventListener('error',e=>{e.target.removeAttribute('src');e.target.alt='プレビューを読み込めません';});
+  card.innerHTML=`<div class="card-visual"><button class="card-open" aria-label="${esc(item.name)}を開く"><img draggable="false" src="${media(item,'thumb')}" loading="lazy" decoding="async" width="480" height="480" alt="${esc(item.name)}"></button><button class="card-select ${state.selected.has(item.id)?'selected':''}" aria-label="${esc(item.name)}を選択" aria-pressed="${state.selected.has(item.id)}">${icon('check')}</button><button class="card-favorite ${item.favorite?'is-favorite':''}" aria-label="お気に入りを切り替え" aria-pressed="${!!item.favorite}">${icon('heart')}</button>${item.kind==='video'?`<span class="image-badge">▶ ${durationLabel(item.duration)}</span>`:item.animated?'<span class="image-badge">ANIMATED</span>':item.format==='TIFF'?'<span class="image-badge">TIFF</span>':''}</div><div class="card-meta"><span class="card-name" title="${esc(item.name)}">${esc(item.name)}</span><button class="card-menu icon-button" aria-label="${esc(item.name)}の情報・編集">${icon('more')}</button></div><div class="card-subtitle"><span class="card-folder">${esc(item.folder||'ライブラリ')}</span><span>·</span><span>${item.width} × ${item.height}</span>${item.tags.length?`<span>· ${esc(item.tags[0])}</span>`:''}</div>`;
+  card.classList.toggle('video-card',item.kind==='video');
+  const thumbnail=$('img',card);
+  thumbnail.addEventListener('load',()=>card.classList.add('thumbnail-ready'));
+  thumbnail.addEventListener('error',()=>{thumbnail.hidden=true;card.classList.add('thumbnail-error');$('.card-open',card).insertAdjacentHTML('beforeend',`<span class="thumbnail-fallback">${icon(item.kind==='video'?'play':'images')}<small>プレビューなし</small></span>`);});
+  if(thumbnail.complete&&thumbnail.naturalWidth)card.classList.add('thumbnail-ready');
   return card;
 }
 function replaceCard(item) {const old=$(`.image-card[data-id="${item.id}"]`);if(old)old.replaceWith(makeCard(item));}
@@ -351,22 +355,53 @@ async function uploadFiles(files,folder){
     if(failures.length){modal('アップロード結果',`<p>${succeeded}件を保存、${failures.length}件は保存できませんでした。</p><ul class="upload-errors">${failures.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`);}else{toast(`${succeeded}件をアップロードしました。`);}
   }finally{uploading=false;$('#upload-button').disabled=false;}
 }
+let dragGhost=null,dragHint=null,dragFrame=0,dragPoint=null,dragSource=null;
+function validDrop(target,payload=dragPayload){
+  if(!target||!payload)return false;
+  const destination=target.dataset.dropFolder;
+  if(payload.folder)return destination!==payload.folder&&!destination.startsWith(payload.folder+'/')&&destination!==parentPath(payload.folder);
+  return payload.ids.some(id=>state.items.find(item=>item.id===id)?.folder!==destination);
+}
+function updateDragHint(e,target){
+  if(!dragHint)return;
+  dragPoint={x:e.clientX,y:e.clientY};
+  dragHint.textContent=validDrop(target)?`ここへ移動：${target.dataset.dropFolder||'ライブラリ'}`:target?'このフォルダには移動できません':'移動先のフォルダへドロップ';
+  dragHint.style.transform=`translate(${Math.max(8,Math.min(e.clientX+18,innerWidth-270))}px,${Math.max(8,Math.min(e.clientY+28,innerHeight-50))}px)`;
+}
+function dragScroll(){
+  if(!dragPayload)return;
+  if(dragPoint){const edge=65,y=dragPoint.y;const delta=y<edge?-Math.ceil((edge-y)/5):y>innerHeight-edge?Math.ceil((y-innerHeight+edge)/5):0;
+    if(delta){const under=document.elementFromPoint(dragPoint.x,y);const sidebar=under?.closest('#sidebar');if(sidebar)sidebar.scrollTop+=delta;else window.scrollBy(0,delta);}}
+  dragFrame=requestAnimationFrame(dragScroll);
+}
 document.addEventListener('dragstart',e=>{
   const folder=e.target.closest('[data-drag-folder]'),card=e.target.closest('.image-card');
   if(folder)dragPayload={folder:folder.dataset.dragFolder};
   else if(card)dragPayload={ids:state.selected.has(card.dataset.id)?[...state.selected]:[card.dataset.id]};
   else return;
   e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-luma',JSON.stringify(dragPayload));
+  dragSource=folder||card;
+  dragGhost=document.createElement('div');dragGhost.className='drag-ghost';
+  const preview=card?.querySelector('img');
+  dragGhost.innerHTML=`${preview&&!preview.hidden?`<img src="${esc(preview.src)}" alt="">`:icon('folder')}<div><strong>${esc(folder?folder.dataset.dragFolder.split('/').pop():$('.card-name',card).textContent)}</strong><span>${dragPayload.ids?.length||1}件を移動</span></div>`;
+  document.body.append(dragGhost);e.dataTransfer.setDragImage(dragGhost,24,24);
+  dragHint=document.createElement('div');dragHint.className='drag-hint';dragHint.setAttribute('role','status');document.body.append(dragHint);
+  updateDragHint(e,null);document.body.classList.add('dragging');
+  requestAnimationFrame(()=>{if(dragSource)dragSource.classList.add('drag-source');});
+  dragFrame=requestAnimationFrame(dragScroll);
 });
-function clearDrag(){dragPayload=null;$$('.drop-target').forEach(el=>el.classList.remove('drop-target'));$('#app').classList.remove('external-drag');}
+function clearDrag(){dragPayload=null;cancelAnimationFrame(dragFrame);dragPoint=null;dragSource=null;dragGhost?.remove();dragHint?.remove();dragGhost=dragHint=null;document.body.classList.remove('dragging');$$('.drop-target,.drag-source').forEach(el=>el.classList.remove('drop-target','drag-source'));$('#app').classList.remove('external-drag');}
+window.addEventListener('blur',clearDrag);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')clearDrag();});
 document.addEventListener('dragend',clearDrag);
 document.addEventListener('dragover',e=>{
   if($('#app').hidden||$('#modal').open||$('#viewer').open)return;
   const external=[...e.dataTransfer.types].includes('Files');
   const target=e.target.closest('[data-drop-folder]');
   if(!external&&!dragPayload)return;
-  e.preventDefault();e.dataTransfer.dropEffect=external?'copy':target?'move':'none';
-  $$('.drop-target').forEach(el=>el.classList.remove('drop-target'));if(target)target.classList.add('drop-target');
+  e.preventDefault();e.dataTransfer.dropEffect=external?'copy':'move';
+  updateDragHint(e,target);
+  $$('.drop-target').forEach(el=>el.classList.remove('drop-target'));if(target&&(external||validDrop(target)))target.classList.add('drop-target');
   $('#app').classList.toggle('external-drag',external);
 });
 document.addEventListener('dragleave',e=>{if(!e.relatedTarget){$('#app').classList.remove('external-drag');$$('.drop-target').forEach(el=>el.classList.remove('drop-target'));}});
@@ -379,15 +414,21 @@ document.addEventListener('drop',safe(async e=>{
   const destination=target?target.dataset.dropFolder:(state.folder||'');
   const files=[...e.dataTransfer.files];
   const containsDirectory=[...e.dataTransfer.items].some(item=>item.webkitGetAsEntry?.()?.isDirectory);
+  const accepted=validDrop(target,payload);
   clearDrag();
   if(external){if(containsDirectory){toast('ブラウザへの追加は画像・動画ファイルを選択してください。フォルダごとの追加は公開用フォルダへコピーできます。');return;}await uploadFiles(files,destination);return;}
-  if(!target)return;
+  if(!accepted)return;
+  target.classList.add('drop-saving');
+  try{
   if(payload.folder){const result=await api('/folders/move','POST',{source:payload.folder,parent:destination});if(state.folder===payload.folder||state.folder?.startsWith(payload.folder+'/'))state.folder=result.path+state.folder.slice(payload.folder.length);toast('フォルダを移動しました。');}
   else{
     const result=await api('/batch','POST',{ids:payload.ids,folder:destination});const failures=result.results.filter(r=>!r.ok);
     state.selected=new Set(failures.map(r=>r.id));state.selecting=failures.length>0;updateSelection();toast(failures.length?`${failures.length}件を移動できませんでした。${failures[0].error}`:`${result.results.length}件を移動しました。`);
   }
   updateHeading();await refreshSummary();await loadImages(true);
+  $$('[data-drop-folder]').filter(el=>el.dataset.dropFolder===destination).forEach(el=>el.classList.add('drop-complete'));
+  setTimeout(()=>$$('.drop-complete').forEach(el=>el.classList.remove('drop-complete')),650);
+  }finally{target.classList.remove('drop-saving');}
 }));
 
 function durationLabel(value){const seconds=Math.max(0,Math.round(value||0));return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;}

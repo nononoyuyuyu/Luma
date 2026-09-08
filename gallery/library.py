@@ -324,7 +324,7 @@ class Library:
             source = self.path(row['path'])
             info = source.stat()
             # Cache keys use current filesystem state, not just the scan database.
-            key = hashlib.sha256(f"v1:{row['id']}:{info.st_mtime_ns}:{info.st_size}:{kind}".encode()).hexdigest()
+            key = hashlib.sha256(f"v2:{row['id']}:{info.st_mtime_ns}:{info.st_size}:{kind}".encode()).hexdigest()
         target = self.cache / f'{key}.webp'
         with self.render_locks[int(key[:4], 16) % len(self.render_locks)]:
             if target.exists():

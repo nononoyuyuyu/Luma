@@ -182,7 +182,28 @@ def main():
             page.locator('#gallery').dispatch_event('drop',{'dataTransfer':transfer})
             expect(page.locator('#upload-status')).to_contain_text('1件をアップロードしました')
             expect(page.locator('.image-card')).to_have_count(5)
+            # Drag feedback on blank space must stay a move, while invalid drops do nothing.
+            page.evaluate("document.addEventListener('dragover',e=>{window.lastDropEffect=e.dataTransfer.dropEffect;})")
+            drag_data=page.evaluate_handle('new DataTransfer()')
+            source=page.locator('.image-card').filter(has=page.locator('[title="desktop-upload.png"]'))
+            source.dispatch_event('dragstart',{'dataTransfer':drag_data,'clientX':600,'clientY':300})
+            page.locator('#gallery').dispatch_event('dragover',{'dataTransfer':drag_data,'clientX':600,'clientY':300})
+            expect(page.locator('.drag-hint')).to_contain_text('移動先のフォルダ')
+            target=page.locator('.folder-card[data-drop-folder="Artwork"]')
+            target.dispatch_event('dragover',{'dataTransfer':drag_data,'clientX':600,'clientY':300})
+            expect(target).to_have_class('folder-card drop-target')
+            page.screenshot(path=str(root/'drag-feedback.png'),animations='disabled')
+            page.keyboard.press('Escape')
+            expect(page.locator('.drag-hint')).to_have_count(0)
+            travel=page.locator('.folder-card[data-drag-folder="Travel"]')
+            travel.dispatch_event('dragstart',{'dataTransfer':drag_data,'clientX':600,'clientY':300})
+            travel.dispatch_event('dragover',{'dataTransfer':drag_data,'clientX':600,'clientY':300})
+            expect(page.locator('.drag-hint')).to_contain_text('移動できません')
+            travel.dispatch_event('drop',{'dataTransfer':drag_data})
+            expect(page.locator('.drag-hint')).to_have_count(0)
+            assert (public/'Travel').is_dir()
             page.locator('.image-card').filter(has=page.locator('[title="desktop-upload.png"]')).drag_to(page.locator('.folder-card[data-drop-folder="Artwork"]'))
+            assert page.evaluate('window.lastDropEffect')=='move'
             expect(page.locator('.image-card')).to_have_count(4)
             assert (public/'Artwork/desktop-upload.png').is_file()
             page.locator('.folder-card[data-drag-folder="Travel"]').drag_to(page.locator('.folder-card[data-drop-folder="Artwork"]'))
@@ -214,6 +235,11 @@ def main():
             make_video(public/'clip.mp4')
             app.state.library.scan()
             page.reload()
+            video_card=page.locator('.image-card').filter(has=page.locator('[title="clip.mp4"]'))
+            expect(video_card.locator('img')).to_have_js_property('complete',True)
+            assert video_card.locator('img').evaluate('(img)=>img.naturalWidth>0')
+            expect(video_card).to_have_class('image-card video-card thumbnail-ready')
+            page.screenshot(path=str(root/'video-thumbnails.png'),animations='disabled')
             page.locator('.image-card').filter(has=page.locator('[title="clip.mp4"]')).locator('.card-open').click()
             player=page.locator('#viewer-video')
             expect(player).to_be_visible()
@@ -263,13 +289,18 @@ def main():
             expect(phone.locator('#upload-status')).to_contain_text('4件は失敗しました')
             assert upload_requests==[],upload_requests
             phone.locator('#close-modal').click()
+            phone.emulate_media(reduced_motion='reduce')
+            phone.locator('#sort-button').click()
+            assert phone.locator('#sort-options').evaluate('(el)=>getComputedStyle(el).animationName')=='none'
+            assert phone.locator('#sort-button').evaluate('(el)=>getComputedStyle(el).transitionDuration')=='0s'
+            phone.locator('#sort-button').click()
             phone.locator('#menu-button').click()
             phone.locator('#logout').click()
             expect(phone.locator('#username')).to_be_visible()
             phone.screenshot(path=str(root/'login-mobile.png'),full_page=True)
             assert not errors, errors
             browser.close()
-        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','mobile upload button video picker handoff','unsupported and disguised files rejected before network upload','logout']}
+        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','mobile upload button video picker handoff','unsupported and disguised files rejected before network upload','drag feedback and Escape cleanup','self folder drop ignored','video thumbnail decoded','reduced motion honored','logout']}
         (root/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps(report,ensure_ascii=True))
     finally:

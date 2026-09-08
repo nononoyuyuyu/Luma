@@ -25,13 +25,22 @@ def inspect(path, thumbnail=False):
             if not thumbnail:
                 return meta
             stream.codec_context.thread_count = 2
-            # Decode only until the first displayable frame, with a packet budget.
+            # Skip opening slates, while keeping decoding bounded and falling back locally.
+            sample_time = min(3.0, duration * .1)
+            try:
+                if sample_time and stream.time_base:
+                    container.seek(int(sample_time / stream.time_base) + (stream.start_time or 0), stream=stream, backward=True)
+            except av.FFmpegError:
+                sample_time = 0
+            # Stop after 500 packets even for damaged or unusually sparse streams.
             for index, packet in enumerate(container.demux(stream)):
                 if index >= 500:
                     break
                 for frame in packet.decode():
                     if frame.width * frame.height > 80_000_000:
                         raise ValueError('対応できない動画の解像度です。')
+                    if frame.pts is not None and stream.time_base and float((frame.pts - (stream.start_time or 0)) * stream.time_base) < sample_time:
+                        continue
                     ratio = min(1, 480 / max(frame.width, frame.height))
                     image = frame.reformat(width=max(1, round(frame.width * ratio)), height=max(1, round(frame.height * ratio)), format='rgb24').to_image()
                     rotation = getattr(frame, 'rotation', 0)

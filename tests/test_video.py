@@ -83,3 +83,11 @@ def test_webm_probe_and_thumbnail(tmp_path):
     assert info['format'] == 'WEBM' and info['video_codec'] == 'vp9'
     with video.inspect(path, thumbnail=True) as frame:
         assert frame.width == 160
+
+
+def test_video_poster_samples_past_opening_frame(tmp_path):
+    path = tmp_path / 'sample.mp4'
+    make_video(path)
+    with video.inspect(path, thumbnail=True) as poster:
+        # Synthetic red channel increases each frame; frame zero would be near zero.
+        assert poster.getpixel((80, 60))[0] >= 15
