@@ -132,9 +132,31 @@ $('#gallery').addEventListener('click',safe(async e=>{
   if(e.target.closest('.card-open')||e.target.closest('.card-menu')){await openViewer(index);if(e.target.closest('.card-menu'))toggleInfo(true);}
 }));
 function toggleSelection(id) {if(state.selected.has(id))state.selected.delete(id);else{if(state.selected.size>=200){toast('一度に選択できるのは200件までです。');return;}state.selected.add(id);}const item=state.items.find(i=>i.id===id);if(item)replaceCard(item);updateSelection();}
-function updateSelection() {$('#gallery').classList.toggle('selecting',state.selecting);$('#selection-bar').hidden=!state.selecting;$('#selected-count').textContent=state.selected.size;$('#select-button').classList.toggle('primary',state.selecting);$('#select-button').setAttribute('aria-pressed',state.selecting);['batch-tags','batch-move','batch-favorite'].forEach(id=>$('#'+id).disabled=!state.selected.size);}
-$('#select-button').onclick=()=>{state.selecting=!state.selecting;if(!state.selecting){state.selected.clear();$$('.image-card').forEach(c=>c.classList.remove('selected'));$$('.card-select').forEach(b=>{b.classList.remove('selected');b.setAttribute('aria-pressed','false');});}updateSelection();};
-$('#clear-selection').onclick=()=>{state.selecting=true;$('#select-button').click();};
+let selectionHistoryOwned=false,selectionHistoryPending=false;
+function clearSelection(){
+  state.selecting=false;state.selected.clear();
+  $$('.image-card').forEach(card=>card.classList.remove('selected'));
+  $$('.card-select').forEach(button=>{button.classList.remove('selected');button.setAttribute('aria-pressed','false');});
+  updateSelection();
+}
+function syncSelectionHistory(){
+  if(selectionHistoryPending)return;
+  if(state.selecting&&!selectionHistoryOwned){
+    history.pushState({...history.state,lumaSelection:true},'');selectionHistoryOwned=true;
+  }else if(!state.selecting&&selectionHistoryOwned){
+    selectionHistoryOwned=false;selectionHistoryPending=true;history.back();
+  }
+}
+window.addEventListener('popstate',()=>{
+  if(selectionHistoryPending){selectionHistoryPending=false;syncSelectionHistory();return;}
+  if(selectionHistoryOwned){
+    selectionHistoryOwned=false;
+    cancelSelectionPress();clearDrag();$('#modal').close();clearSelection();
+  }
+});
+function updateSelection() {syncSelectionHistory();$('#gallery').classList.toggle('selecting',state.selecting);$('#selection-bar').hidden=!state.selecting;$('#selected-count').textContent=state.selected.size;$('#select-button').classList.toggle('primary',state.selecting);$('#select-button').setAttribute('aria-pressed',state.selecting);['batch-tags','batch-move','batch-favorite'].forEach(id=>$('#'+id).disabled=!state.selected.size);}
+$('#select-button').onclick=()=>{if(state.selecting)clearSelection();else{state.selecting=true;updateSelection();}};
+$('#clear-selection').onclick=clearSelection;
 $('#select-loaded').onclick=()=>{state.items.slice(0,200).forEach(i=>state.selected.add(i.id));$('#gallery').replaceChildren(...childFolders().map(makeFolderCard),...state.items.map(makeCard));updateSelection();};
 function folderOptions(selected='') {return (state.summary?.folders||[]).map(f=>`<option value="${esc(f.path)}" ${f.path===selected?'selected':''}>${esc(f.path||'ライブラリ直下')}</option>`).join('');}
 function modal(title,html) {$('#modal-title').textContent=title;$('#modal-body').innerHTML=html;icons($('#modal'));if(!$('#modal').open)$('#modal').showModal();}
@@ -166,7 +188,7 @@ async function requestScan(){await api('/scan','POST',{});toast('公開用フォ
 $('#scan-button').onclick=safe(requestScan);$('#empty-scan').onclick=safe(requestScan);
 function closeSidebar(){$('#sidebar').classList.remove('open');$('#sidebar-scrim').hidden=true;}
 $('#menu-button').onclick=()=>{$('#sidebar').classList.add('open');$('#sidebar-scrim').hidden=false;};$('#sidebar-scrim').onclick=closeSidebar;
-$('#logout').onclick=safe(async()=>{await api('/logout','POST',{});closeSidebar();state.selected.clear();state.selecting=false;await initialize();});
+$('#logout').onclick=safe(async()=>{await api('/logout','POST',{});closeSidebar();state.selected.clear();state.selecting=false;updateSelection();await initialize();});
 
 $('#settings-button').onclick=safe(async()=>{
   closeSidebar();const settings=await api('/settings');
