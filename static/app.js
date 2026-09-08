@@ -366,7 +366,8 @@ function updateDragHint(e,target){
   if(!dragHint)return;
   dragPoint={x:e.clientX,y:e.clientY};
   dragHint.textContent=validDrop(target)?`ここへ移動：${target.dataset.dropFolder||'ライブラリ'}`:target?'このフォルダには移動できません':'移動先のフォルダへドロップ';
-  dragHint.style.transform=`translate(${Math.max(8,Math.min(e.clientX+18,innerWidth-270))}px,${Math.max(8,Math.min(e.clientY+28,innerHeight-50))}px)`;
+  // Keep guidance away from the native drag preview, including near screen edges.
+  dragHint.classList.toggle('at-top',e.clientY>innerHeight-180);
 }
 function dragScroll(){
   if(!dragPayload)return;
