@@ -49,11 +49,11 @@ async function initialize() {
   const status=await api('/status');
   let me=null; if(status.configured) { try {me=await api('/me');} catch{} }
   $('#auth').hidden=!!me; $('#app').hidden=!me;
-  if(me) {state.me=me; $('#avatar').textContent=me.username.slice(0,1).toUpperCase(); await refreshSummary(); await loadImages(true); refreshTimer=setInterval(safe(poll),5000); return;}
+  if(me) {state.me=me; $('#avatar').textContent=me.username.slice(0,1).toUpperCase(); updateHeading(); await refreshSummary(); await loadImages(true); refreshTimer=setInterval(safe(poll),5000); return;}
   state.items=[];state.selected.clear();$('#gallery').replaceChildren();$('#viewer-image').removeAttribute('src');$('#filmstrip').replaceChildren();$('#image-info').replaceChildren();
   if(!status.configured && !status.local) { $('#auth-form').innerHTML='<div class="eyebrow">WELCOME TO LUMA</div><h1>準備がもう少し。</h1><p class="auth-intro">このPCの <strong>localhost:8790</strong> を開き、管理者IDとパスワードを設定してください。</p>';return; }
   const setup=!status.configured;
-  $('#auth-form').innerHTML=`<div class="eyebrow">${setup?'MAKE YOURSELF AT HOME':'WELCOME BACK'}</div><h1>${setup?'あなたのライブラリを、はじめよう。':'おかえりなさい。'}</h1><p class="auth-intro">${setup?'画像を置くだけで、いつものスマホがビュアーに。<br>まずは管理者のログイン情報を設定します。':'あなたのコレクションが、待っています。<br>IDとパスワードでログインしてください。'}</p><form id="login-form">${errorBox}<div class="field"><label for="username">${setup?'管理者ID':'ID'}</label><input id="username" name="username" autocomplete="username" required maxlength="64" placeholder="IDを入力"></div><div class="field"><label for="password">パスワード${setup?'（12文字以上）':''}</label><input id="password" name="password" type="password" autocomplete="${setup?'new-password':'current-password'}" required minlength="${setup?12:1}" maxlength="256" placeholder="${setup?'12文字以上で設定':'パスワードを入力'}"></div>${setup?`<div class="field"><label for="password-confirm">パスワード（確認）</label><input id="password-confirm" name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></div><div class="field"><label>公開用フォルダ</label><code class="path-box">${esc(status.public_dir)}</code><small>ここに画像やフォルダを入れると自動で読み込みます。<br>IPフィルタは初期状態では無効です。ログイン後に設定できます。</small></div>`:''}<button type="submit" class="button primary full-width">${setup?'ライブラリを作成':'ログイン'} ${icon('right')}</button></form>`;
+  $('#auth-form').innerHTML=`<div class="eyebrow">${setup?'MAKE YOURSELF AT HOME':'WELCOME BACK'}</div><h1>${setup?'あなたのライブラリを、はじめよう。':'おかえりなさい。'}</h1><p class="auth-intro">${setup?'画像を置くだけで、いつものスマホがビュアーに。<br>まずは管理者のログイン情報を設定します。':'あなたのコレクションが、待っています。<br>IDとパスワードでログインしてください。'}</p><form id="login-form">${errorBox}<div class="field"><label for="username">${setup?'管理者ID':'ID'}</label><input id="username" name="username" autocomplete="username" required maxlength="64" placeholder="IDを入力"></div><div class="field"><label for="password">パスワード${setup?'（12文字以上）':''}</label><input id="password" name="password" type="password" autocomplete="${setup?'new-password':'current-password'}" required minlength="${setup?12:1}" maxlength="256" placeholder="${setup?'12文字以上で設定':'パスワードを入力'}"></div>${setup?`<div class="field"><label for="password-confirm">パスワード（確認）</label><input id="password-confirm" name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></div><div class="field"><label>公開用フォルダ</label><code class="path-box">${esc(status.public_dir)}</code><small>ここに画像・動画やフォルダを入れると自動で読み込みます。<br>IPフィルタは初期状態では無効です。ログイン後に設定できます。</small></div>`:''}<button type="submit" class="button primary full-width">${setup?'ライブラリを作成':'ログイン'} ${icon('right')}</button></form>`;
   bindForm($('#login-form'),async data=>{
     if(setup && data.get('password')!==data.get('confirm')) throw new Error('確認用パスワードが一致しません。');
     const body={username:data.get('username'),password:data.get('password')};
@@ -67,9 +67,9 @@ async function initialize() {
 async function refreshSummary() {
   const summary=await api('/summary');state.summary=summary;
   $('#all-count').textContent=summary.count.toLocaleString();$('#fav-count').textContent=summary.favorites.toLocaleString();
-  $('#storage-count').textContent=summary.count.toLocaleString()+' images';$('#storage-size').textContent=formatBytes(summary.bytes)+' · このPCに保存';
+  $('#storage-count').textContent=summary.count.toLocaleString()+' files';$('#storage-size').textContent=formatBytes(summary.bytes)+' · このPCに保存';
   renderFolderTree();
-  $('#tag-nav').innerHTML=summary.tags.length?summary.tags.map(t=>`<button class="tag-chip ${state.tags.includes(t.tag)?'active':''}" data-tag="${esc(t.tag)}" title="${esc(t.tag)} · ${t.count}枚">${esc(t.tag)}</button>`).join(''):'<span class="hint">画像にタグを付けて整理</span>';
+  $('#tag-nav').innerHTML=summary.tags.length?summary.tags.map(t=>`<button class="tag-chip ${state.tags.includes(t.tag)?'active':''}" data-tag="${esc(t.tag)}" title="${esc(t.tag)} · ${t.count}件">${esc(t.tag)}</button>`).join(''):'<span class="hint">ファイルにタグを付けて整理</span>';
   $('#scan-status').textContent=summary.scan.running?'スキャン中…':summary.scan.message||'';
   return summary;
 }
@@ -84,7 +84,7 @@ async function poll() {
 }
 function updateHeading() {
   const name=state.folder?state.folder.split('/').pop():state.view==='favorites'?'お気に入り':'ライブラリ';
-  $('#view-title').innerHTML=esc(name)+'<span class="heading-dot">.</span>';$('#breadcrumb').textContent=name;
+  $('#view-title').innerHTML=esc(name)+'<span class="heading-dot">.</span>';renderBreadcrumb();
   $('#view-description').hidden=true;
   $$('#main-nav .nav-item').forEach(b=>b.classList.toggle('active',(!state.folder)&&b.dataset.view===state.view));
   $('#parent-folder').hidden=!state.folder;
@@ -105,8 +105,8 @@ async function loadImages(reset=false) {
     const fragment=document.createDocumentFragment();response.items.forEach(item=>fragment.append(makeCard(item)));$('#gallery').append(fragment);
     $('#result-count').textContent=response.total.toLocaleString();$('#empty-state').hidden=response.total!==0||childFolders().length>0;
     const filtered=!!(state.q||state.tags.length||state.view==='favorites'||state.folder!==null);
-    $('#empty-title').textContent='画像がありません';
-    $('#empty-description').innerHTML=filtered?'検索条件を変えるか、このフォルダに画像を追加してください。':'<code>public</code> フォルダに画像を入れると、自動でここに並びます。<br>フォルダごとの追加にも対応しています。';
+    $('#empty-title').textContent='画像・動画がありません';
+    $('#empty-description').innerHTML=filtered?'検索条件を変えるか、このフォルダに画像・動画を追加してください。':'<code>public</code> フォルダに画像・動画を入れると、自動でここに並びます。<br>フォルダごとの追加にも対応しています。';
     $('#load-more').hidden=state.items.length>=state.total;
   }finally{if(generation===state.generation){state.loading=false;$('#loading').hidden=true;}}})();
   return loadingPromise;
@@ -114,7 +114,7 @@ async function loadImages(reset=false) {
 function makeCard(item) {
   const card=document.createElement('article');card.className='image-card'+(state.selected.has(item.id)?' selected':'');card.dataset.id=item.id;
   card.draggable=true;
-  card.innerHTML=`<div class="card-visual"><button class="card-open" aria-label="${esc(item.name)}を開く"><img src="${media(item,'thumb')}" loading="lazy" decoding="async" width="480" height="480" alt="${esc(item.name)}"></button><button class="card-select ${state.selected.has(item.id)?'selected':''}" aria-label="${esc(item.name)}を選択" aria-pressed="${state.selected.has(item.id)}">${icon('check')}</button><button class="card-favorite ${item.favorite?'is-favorite':''}" aria-label="お気に入りを切り替え" aria-pressed="${!!item.favorite}">${icon('heart')}</button>${item.animated?'<span class="image-badge">ANIMATED</span>':item.format==='TIFF'?'<span class="image-badge">TIFF</span>':''}</div><div class="card-meta"><span class="card-name" title="${esc(item.name)}">${esc(item.name)}</span><button class="card-menu icon-button" aria-label="${esc(item.name)}の情報・編集">${icon('more')}</button></div><div class="card-subtitle"><span class="card-folder">${esc(item.folder||'ライブラリ')}</span><span>·</span><span>${item.width} × ${item.height}</span>${item.tags.length?`<span>· ${esc(item.tags[0])}</span>`:''}</div>`;
+  card.innerHTML=`<div class="card-visual"><button class="card-open" aria-label="${esc(item.name)}を開く"><img src="${media(item,'thumb')}" loading="lazy" decoding="async" width="480" height="480" alt="${esc(item.name)}"></button><button class="card-select ${state.selected.has(item.id)?'selected':''}" aria-label="${esc(item.name)}を選択" aria-pressed="${state.selected.has(item.id)}">${icon('check')}</button><button class="card-favorite ${item.favorite?'is-favorite':''}" aria-label="お気に入りを切り替え" aria-pressed="${!!item.favorite}">${icon('heart')}</button>${item.kind==='video'?`<span class="image-badge">▶ ${durationLabel(item.duration)}</span>`:item.animated?'<span class="image-badge">ANIMATED</span>':item.format==='TIFF'?'<span class="image-badge">TIFF</span>':''}</div><div class="card-meta"><span class="card-name" title="${esc(item.name)}">${esc(item.name)}</span><button class="card-menu icon-button" aria-label="${esc(item.name)}の情報・編集">${icon('more')}</button></div><div class="card-subtitle"><span class="card-folder">${esc(item.folder||'ライブラリ')}</span><span>·</span><span>${item.width} × ${item.height}</span>${item.tags.length?`<span>· ${esc(item.tags[0])}</span>`:''}</div>`;
   $('img',card).addEventListener('error',e=>{e.target.removeAttribute('src');e.target.alt='プレビューを読み込めません';});
   return card;
 }
@@ -127,7 +127,7 @@ $('#gallery').addEventListener('click',safe(async e=>{
   if(e.target.closest('.card-select')||state.selecting){state.selecting=true;toggleSelection(item.id);return;}
   if(e.target.closest('.card-open')||e.target.closest('.card-menu')){await openViewer(index);if(e.target.closest('.card-menu'))toggleInfo(true);}
 }));
-function toggleSelection(id) {if(state.selected.has(id))state.selected.delete(id);else{if(state.selected.size>=200){toast('一度に選択できるのは200枚までです。');return;}state.selected.add(id);}const item=state.items.find(i=>i.id===id);if(item)replaceCard(item);updateSelection();}
+function toggleSelection(id) {if(state.selected.has(id))state.selected.delete(id);else{if(state.selected.size>=200){toast('一度に選択できるのは200件までです。');return;}state.selected.add(id);}const item=state.items.find(i=>i.id===id);if(item)replaceCard(item);updateSelection();}
 function updateSelection() {$('#gallery').classList.toggle('selecting',state.selecting);$('#selection-bar').hidden=!state.selecting;$('#selected-count').textContent=state.selected.size;$('#select-button').classList.toggle('primary',state.selecting);$('#select-button').setAttribute('aria-pressed',state.selecting);['batch-tags','batch-move','batch-favorite'].forEach(id=>$('#'+id).disabled=!state.selected.size);}
 $('#select-button').onclick=()=>{state.selecting=!state.selecting;if(!state.selecting){state.selected.clear();$$('.image-card').forEach(c=>c.classList.remove('selected'));$$('.card-select').forEach(b=>{b.classList.remove('selected');b.setAttribute('aria-pressed','false');});}updateSelection();};
 $('#clear-selection').onclick=()=>{state.selecting=true;$('#select-button').click();};
@@ -139,11 +139,11 @@ $('#modal').addEventListener('click',e=>{if(e.target===$('#modal')){const r=e.ta
 async function batchAction(body) {
   const result=await api('/batch','POST',{ids:[...state.selected],...body});
   const failures=result.results.filter(r=>!r.ok);state.selected=new Set(failures.map(r=>r.id));
-  if(!failures.length){$('#modal').close();state.selecting=false;toast(`${result.results.length}枚の画像を更新しました。`);}else{const message=`${result.results.length-failures.length}枚を更新、${failures.length}枚は変更できませんでした。\n${failures[0].error}`;const box=$('#modal .form-error');if(box)box.textContent=message;toast(message);}
+  if(!failures.length){$('#modal').close();state.selecting=false;toast(`${result.results.length}件のファイルを更新しました。`);}else{const message=`${result.results.length-failures.length}件を更新、${failures.length}件は変更できませんでした。\n${failures[0].error}`;const box=$('#modal .form-error');if(box)box.textContent=message;toast(message);}
   updateSelection();await refreshSummary();await loadImages(true);
 }
-$('#batch-tags').onclick=()=>{modal('選択した画像のタグを編集',`<form id="batch-form">${errorBox}<p class="hint">${state.selected.size}枚の画像に適用します。既存のタグは保持されます。</p><div class="field"><label for="add-tags">追加するタグ</label><input id="add-tags" name="add" placeholder="イラスト, お気に入り, 旅行"><small>カンマで区切って複数指定できます。</small></div><div class="field"><label for="remove-tags">外すタグ</label><input id="remove-tags" name="remove"></div><button type="submit" class="button primary full-width">タグを更新</button></form>`);bindForm($('#batch-form'),d=>batchAction({add_tags:tagList(d.get('add')),remove_tags:tagList(d.get('remove'))}));};
-$('#batch-move').onclick=()=>{modal('選択した画像を移動',`<form id="batch-form">${errorBox}<p class="hint">${state.selected.size}枚の実ファイルを移動します。同名ファイルは上書きしません。</p><div class="field"><label for="move-folder">移動先フォルダ</label><select id="move-folder" name="folder">${folderOptions(state.folder||'')}</select></div><button type="submit" class="button primary full-width">このフォルダへ移動</button></form>`);bindForm($('#batch-form'),d=>batchAction({folder:d.get('folder')}));};
+$('#batch-tags').onclick=()=>{modal('選択したファイルのタグを編集',`<form id="batch-form">${errorBox}<p class="hint">${state.selected.size}件のファイルに適用します。既存のタグは保持されます。</p><div class="field"><label for="add-tags">追加するタグ</label><input id="add-tags" name="add" placeholder="イラスト, お気に入り, 旅行"><small>カンマで区切って複数指定できます。</small></div><div class="field"><label for="remove-tags">外すタグ</label><input id="remove-tags" name="remove"></div><button type="submit" class="button primary full-width">タグを更新</button></form>`);bindForm($('#batch-form'),d=>batchAction({add_tags:tagList(d.get('add')),remove_tags:tagList(d.get('remove'))}));};
+$('#batch-move').onclick=()=>{modal('選択したファイルを移動',`<form id="batch-form">${errorBox}<p class="hint">${state.selected.size}件の実ファイルを移動します。同名ファイルは上書きしません。</p><div class="field"><label for="move-folder">移動先フォルダ</label><select id="move-folder" name="folder">${folderOptions(state.folder||'')}</select></div><button type="submit" class="button primary full-width">このフォルダへ移動</button></form>`);bindForm($('#batch-form'),d=>batchAction({folder:d.get('folder')}));};
 $('#batch-favorite').onclick=safe(()=>batchAction({favorite:true}));
 $('#new-folder').onclick=()=>{modal('新しいフォルダ',`<form id="folder-form">${errorBox}<div class="field"><label for="folder-parent">作成場所</label><select name="parent" id="folder-parent">${folderOptions(state.folder||'')}</select></div><div class="field"><label for="folder-name">フォルダ名</label><input id="folder-name" name="name" required maxlength="180" placeholder="例：2026年の旅行"></div><button class="button primary full-width" type="submit">フォルダを作成</button></form>`);bindForm($('#folder-form'),async d=>{await api('/folders','POST',{parent:d.get('parent'),name:d.get('name')});$('#modal').close();await refreshSummary();toast('フォルダを作成しました。');});};
 $('#main-nav').onclick=safe(e=>{const b=e.target.closest('[data-view]');if(b)return changeView(b.dataset.view);});
@@ -166,7 +166,7 @@ $('#logout').onclick=safe(async()=>{await api('/logout','POST',{});closeSidebar(
 
 $('#settings-button').onclick=safe(async()=>{
   closeSidebar();const settings=await api('/settings');
-  modal('設定・アクセス管理',`<div class="field"><label>画像を入れるフォルダ</label><code class="path-box">${esc(settings.public_dir)}</code><small>サブフォルダを含め15秒ごとに確認します。コピー中の画像は次回に取り込みます。</small></div><div class="settings-status"><span>現在の端末</span><strong>${esc(state.me.client_ip)}</strong></div><section class="settings-section"><h3>IPアドレスのホワイトリスト</h3><form id="access-form">${errorBox}<label class="check-label"><input name="enabled" type="checkbox" ${settings.filter_enabled?'checked':''}>許可したIPアドレスだけアクセス可能にする</label><div class="field"><label for="whitelist">許可アドレス（1行に1つ）</label><textarea id="whitelist" name="whitelist" placeholder="192.168.0.25&#10;192.168.0.0/24">${esc(settings.whitelist.join('\n'))}</textarea><small>端末単位のIP、またはCIDR形式に対応。localhostは常に許可します。無効時もID・パスワード認証は必要です。</small></div><button class="button primary full-width" type="submit">アクセス設定を保存</button></form></section><section class="settings-section"><h3>パスワードを変更</h3><form id="password-form">${errorBox}<div class="field"><label for="current-password">現在のパスワード</label><input id="current-password" name="current" type="password" autocomplete="current-password" required maxlength="256"></div><div class="field"><label for="new-password">新しいパスワード（12文字以上）</label><input id="new-password" name="new" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></div><div class="field"><label for="new-confirm">新しいパスワード（確認）</label><input id="new-confirm" name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></div><p class="hint">変更すると、すべての端末からログアウトします。</p><button class="button secondary full-width" type="submit">パスワードを変更</button></form></section><section class="settings-section"><p class="hint">${location.protocol==='https:'?'HTTPSで接続しています。':'現在はHTTP接続です。通信の暗号化が必要なLANでは、付属のHTTPS起動手順をご利用ください。'}<br>画像やタグはこのPC内に保存されます。</p></section>`);
+  modal('設定・アクセス管理',`<div class="field"><label>画像・動画を入れるフォルダ</label><code class="path-box">${esc(settings.public_dir)}</code><small>サブフォルダを含め15秒ごとに確認します。コピー中のファイルは次回に取り込みます。</small></div><div class="settings-status"><span>現在の端末</span><strong>${esc(state.me.client_ip)}</strong></div><section class="settings-section"><h3>IPアドレスのホワイトリスト</h3><form id="access-form">${errorBox}<label class="check-label"><input name="enabled" type="checkbox" ${settings.filter_enabled?'checked':''}>許可したIPアドレスだけアクセス可能にする</label><div class="field"><label for="whitelist">許可アドレス（1行に1つ）</label><textarea id="whitelist" name="whitelist" placeholder="192.168.0.25&#10;192.168.0.0/24">${esc(settings.whitelist.join('\n'))}</textarea><small>端末単位のIP、またはCIDR形式に対応。localhostは常に許可します。無効時もID・パスワード認証は必要です。</small></div><button class="button primary full-width" type="submit">アクセス設定を保存</button></form></section><section class="settings-section"><h3>パスワードを変更</h3><form id="password-form">${errorBox}<div class="field"><label for="current-password">現在のパスワード</label><input id="current-password" name="current" type="password" autocomplete="current-password" required maxlength="256"></div><div class="field"><label for="new-password">新しいパスワード（12文字以上）</label><input id="new-password" name="new" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></div><div class="field"><label for="new-confirm">新しいパスワード（確認）</label><input id="new-confirm" name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></div><p class="hint">変更すると、すべての端末からログアウトします。</p><button class="button secondary full-width" type="submit">パスワードを変更</button></form></section><section class="settings-section"><p class="hint">${location.protocol==='https:'?'HTTPSで接続しています。':'現在はHTTP接続です。通信の暗号化が必要なLANでは、付属のHTTPS起動手順をご利用ください。'}<br>画像・動画やタグはこのPC内に保存されます。</p></section>`);
   bindForm($('#access-form'),async d=>{await api('/settings/access','PUT',{filter_enabled:d.get('enabled')==='on',whitelist:d.get('whitelist').split(/\n/).map(v=>v.trim()).filter(Boolean)});toast('アクセス設定を保存しました。');});
   bindForm($('#password-form'),async d=>{if(d.get('new')!==d.get('confirm'))throw new Error('確認用パスワードが一致しません。');await api('/settings/password','PUT',{current_password:d.get('current'),password:d.get('new')});$('#modal').close();$('#modal-body').replaceChildren();toast('パスワードを変更しました。再ログインしてください。');await initialize();});
 });
@@ -175,14 +175,24 @@ const viewer=$('#viewer'),stage=$('#stage'),viewerImage=$('#viewer-image');
 let imageSequence=0;
 async function openViewer(index) {state.viewerIndex=index;state.original=false;if(!viewer.open)viewer.showModal();toggleInfo(false);await showImage();}
 function stopSlideshow(){clearInterval(state.slide);state.slide=null;$('#slideshow').classList.remove('active');$('#slideshow').innerHTML=icon('play');$('#slideshow').setAttribute('aria-label','スライドショーを開始');}
-function closeViewer(){stopSlideshow();imageSequence++;if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});viewer.close();state.viewerIndex=-1;viewerImage.removeAttribute('src');$('#image-info').hidden=true;}
+function closeViewer(){stopSlideshow();imageSequence++;if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});stopVideo();viewer.close();state.viewerIndex=-1;viewerImage.removeAttribute('src');$('#image-info').hidden=true;}
 $('#close-viewer').onclick=closeViewer;viewer.addEventListener('cancel',e=>{e.preventDefault();closeViewer();});
 async function showImage() {
   const item=state.items[state.viewerIndex];if(!item)return;
+  stopVideo();
   const seq=++imageSequence;state.scale=1;state.x=0;state.y=0;applyTransform();
   $('#viewer-name').textContent=item.name;$('#viewer-position').textContent=`${state.viewerIndex+1} / ${state.total.toLocaleString()}`;$('#viewer-resolution').textContent=`${item.width} × ${item.height} · ${formatBytes(item.size)}`;
   $('#viewer-heart').classList.toggle('active',!!item.favorite);$('#viewer-heart').setAttribute('aria-pressed',!!item.favorite);
   $('#previous').disabled=state.viewerIndex===0;$('#next').disabled=state.viewerIndex>=state.total-1;
+  const isVideo=item.kind==='video';
+  viewerImage.hidden=isVideo;$('#viewer-video').hidden=!isVideo;stage.classList.toggle('video-mode',isVideo);
+  $('.zoom-controls').hidden=isVideo;$('#slideshow').disabled=isVideo;
+  if(isVideo){
+    stopSlideshow();const player=$('#viewer-video');$('#viewer-loading').hidden=false;$('#viewer-loading').textContent='動画を読み込み中…';
+    player.onloadedmetadata=()=>{if(seq===imageSequence)$('#viewer-loading').hidden=true;};
+    player.onerror=()=>{if(seq===imageSequence){$('#viewer-loading').hidden=false;$('#viewer-loading').textContent='このブラウザでは再生できない形式です。情報パネルから原本を保存できます。';}};
+    player.poster=media(item,'thumb');player.src=media(item,'original');
+  }else{
   const nativeSupported=['JPEG','PNG','WEBP','GIF','AVIF','BMP'].includes(item.format);
   const original=state.original||item.animated;
   $('#original-toggle').classList.toggle('active',state.original);$('#original-toggle').textContent=state.original?'軽量版':'原寸';$('#original-toggle').disabled=!nativeSupported;
@@ -191,9 +201,10 @@ async function showImage() {
   viewerImage.onload=()=>{if(seq===imageSequence)$('#viewer-loading').hidden=true;};
   viewerImage.onerror=()=>{if(seq===imageSequence){$('#viewer-loading').hidden=false;$('#viewer-loading').textContent='表示できません。情報パネルから原本を保存できます。';}};
   viewerImage.src=media(item,original&&nativeSupported?'original':'preview');
+  }
   renderFilmstrip();if(!$('#image-info').hidden)renderInfo();
   // Warm just the adjacent previews; never prefetch originals or the entire collection.
-  for(const next of [state.items[state.viewerIndex-1],state.items[state.viewerIndex+1]])if(next){const prefetch=new Image();prefetch.src=media(next,'preview');}
+  for(const next of [state.items[state.viewerIndex-1],state.items[state.viewerIndex+1]])if(next&&next.kind!=='video'){const prefetch=new Image();prefetch.src=media(next,'preview');}
 }
 async function navigate(delta) {
   const target=state.viewerIndex+delta;if(target<0||target>=state.total)return;
@@ -211,8 +222,8 @@ function toggleInfo(force) {const show=force??$('#image-info').hidden;$('#image-
 $('#info-toggle').onclick=()=>toggleInfo();
 function renderInfo() {
   const item=state.items[state.viewerIndex];if(!item)return;
-  $('#image-info').innerHTML=`<h3>画像の情報・編集</h3><form id="image-form">${errorBox}<div class="field"><label for="edit-name">ファイル名</label><input id="edit-name" name="name" value="${esc(item.name)}" required maxlength="180"></div><div class="field"><label for="edit-folder">フォルダ</label><select id="edit-folder" name="folder">${folderOptions(item.folder)}</select></div><div class="field"><label for="edit-tags">タグ</label><input id="edit-tags" name="tags" value="${esc(item.tags.join(', '))}" placeholder="イラスト, 旅行"><small class="hint">カンマ区切り・1枚につき30個まで</small></div><button class="button primary full-width" type="submit">変更を保存</button><p class="hint">名前・フォルダの変更は実ファイルに反映されます。</p></form><dl><dt>解像度</dt><dd>${item.width} × ${item.height}</dd><dt>形式</dt><dd>${esc(item.format)}${item.animated?' · アニメーション':''}</dd><dt>サイズ</dt><dd>${formatBytes(item.size)}</dd><dt>更新日</dt><dd>${esc(new Date(item.mtime_ns/1e6).toLocaleString('ja-JP'))}</dd><dt>保存場所</dt><dd>${esc(item.path)}</dd></dl><a class="button secondary full-width" href="${media(item,'download')}" download>${icon('download')}原本をダウンロード</a>`;
-  bindForm($('#image-form'),async d=>{const updated=await api('/images/'+item.id,'PATCH',{name:d.get('name'),folder:d.get('folder'),tags:tagList(d.get('tags'))});updateItem(updated);await refreshSummary();$('#viewer-name').textContent=updated.name;renderInfo();toast('画像の情報を保存しました。');});
+  $('#image-info').innerHTML=`<h3>ファイルの情報・編集</h3><form id="image-form">${errorBox}<div class="field"><label for="edit-name">ファイル名</label><input id="edit-name" name="name" value="${esc(item.name)}" required maxlength="180"></div><div class="field"><label for="edit-folder">フォルダ</label><select id="edit-folder" name="folder">${folderOptions(item.folder)}</select></div><div class="field"><label for="edit-tags">タグ</label><input id="edit-tags" name="tags" value="${esc(item.tags.join(', '))}" placeholder="イラスト, 旅行"><small class="hint">カンマ区切り・1ファイルにつき30個まで</small></div><button class="button primary full-width" type="submit">変更を保存</button><p class="hint">名前・フォルダの変更は実ファイルに反映されます。</p></form><dl><dt>解像度</dt><dd>${item.width} × ${item.height}</dd><dt>形式</dt><dd>${esc(item.format)}${item.animated?' · アニメーション':''}</dd>${item.kind==='video'?`<dt>再生時間</dt><dd>${durationLabel(item.duration)}</dd><dt>コーデック</dt><dd>${esc(item.video_codec)}</dd>`:''}<dt>サイズ</dt><dd>${formatBytes(item.size)}</dd><dt>更新日</dt><dd>${esc(new Date(item.mtime_ns/1e6).toLocaleString('ja-JP'))}</dd><dt>保存場所</dt><dd>${esc(item.path)}</dd></dl><a class="button secondary full-width" href="${media(item,'download')}" download>${icon('download')}原本をダウンロード</a>`;
+  bindForm($('#image-form'),async d=>{const updated=await api('/images/'+item.id,'PATCH',{name:d.get('name'),folder:d.get('folder'),tags:tagList(d.get('tags'))});updateItem(updated);await refreshSummary();$('#viewer-name').textContent=updated.name;renderInfo();toast('ファイルの情報を保存しました。');});
 }
 $('#viewer-heart').onclick=safe(async()=>{const item=state.items[state.viewerIndex];if(!item)return;const updated=await api('/images/'+item.id,'PATCH',{favorite:!item.favorite});updateItem(updated);$('#viewer-heart').classList.toggle('active',!!updated.favorite);$('#viewer-heart').setAttribute('aria-pressed',!!updated.favorite);await refreshSummary();});
 $('#slideshow').onclick=()=>{if(state.slide){stopSlideshow();return;}toggleInfo(false);$('#slideshow').classList.add('active');$('#slideshow').innerHTML=icon('pause');$('#slideshow').setAttribute('aria-label','スライドショーを停止');state.slide=setInterval(safe(async()=>{if(document.hidden)return;if(state.viewerIndex>=state.total-1){stopSlideshow();return;}await navigate(1);}),5000);};
@@ -227,11 +238,11 @@ function applyTransform() {
 }
 function zoom(next,cx=stage.clientWidth/2,cy=stage.clientHeight/2) {const old=state.scale;state.scale=Math.max(1,Math.min(10,next));const ratio=state.scale/old;state.x=cx-stage.clientWidth/2-(cx-stage.clientWidth/2-state.x)*ratio;state.y=cy-stage.clientHeight/2-(cy-stage.clientHeight/2-state.y)*ratio;applyTransform();}
 $('#zoom-in').onclick=()=>zoom(state.scale*1.5);$('#zoom-out').onclick=()=>zoom(state.scale/1.5);$('#zoom-reset').onclick=()=>{state.scale=1;applyTransform();};
-stage.addEventListener('wheel',e=>{e.preventDefault();const r=stage.getBoundingClientRect();zoom(state.scale*Math.exp(-e.deltaY*.002),e.clientX-r.left,e.clientY-r.top);},{passive:false});
-stage.addEventListener('dblclick',e=>{if(e.target.closest('button'))return;const r=stage.getBoundingClientRect();zoom(state.scale>1?1:2.5,e.clientX-r.left,e.clientY-r.top);});
+stage.addEventListener('wheel',e=>{if(state.items[state.viewerIndex]?.kind==='video')return;e.preventDefault();const r=stage.getBoundingClientRect();zoom(state.scale*Math.exp(-e.deltaY*.002),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+stage.addEventListener('dblclick',e=>{if(e.target.closest('button,video')||state.items[state.viewerIndex]?.kind==='video')return;const r=stage.getBoundingClientRect();zoom(state.scale>1?1:2.5,e.clientX-r.left,e.clientY-r.top);});
 const pointers=new Map();let gesture=null,lastTap=0;
 stage.addEventListener('pointerdown',e=>{
-  if(e.target.closest('button'))return;stage.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(e.target.closest('button,video')||state.items[state.viewerIndex]?.kind==='video')return;stage.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size===1)gesture={x:e.clientX,y:e.clientY,baseX:state.x,baseY:state.y,start:performance.now(),moved:false,pinched:false};
   if(pointers.size===2){const [a,b]=[...pointers.values()];gesture={...gesture,distance:Math.hypot(a.x-b.x,a.y-b.y),scale:state.scale,pinched:true,midX:(a.x+b.x)/2,midY:(a.y+b.y)/2,baseX:state.x,baseY:state.y};}
 });
@@ -253,7 +264,7 @@ stage.addEventListener('pointerup',endPointer);stage.addEventListener('pointerca
 window.addEventListener('resize',()=>{if(viewer.open)applyTransform();});
 document.addEventListener('keydown',safe(async e=>{
   if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
-  if(viewer.open){if(e.key==='ArrowRight'){e.preventDefault();await navigate(1);}if(e.key==='ArrowLeft'){e.preventDefault();await navigate(-1);}if(e.key==='+'||e.key==='=')zoom(state.scale*1.5);if(e.key==='-')zoom(state.scale/1.5);if(e.key==='0'){state.scale=1;applyTransform();}if(e.key.toLowerCase()==='i')toggleInfo();if(e.key===' '){e.preventDefault();$('#slideshow').click();}return;}
+  if(viewer.open){if(e.target.closest('video'))return;if(e.key==='ArrowRight'){e.preventDefault();await navigate(1);}if(e.key==='ArrowLeft'){e.preventDefault();await navigate(-1);}if(e.key==='+'||e.key==='=')zoom(state.scale*1.5);if(e.key==='-')zoom(state.scale/1.5);if(e.key==='0'){state.scale=1;applyTransform();}if(e.key.toLowerCase()==='i')toggleInfo();if(e.key===' '){e.preventDefault();const player=$('#viewer-video');if(!player.hidden){player.paused?await player.play():player.pause();}else $('#slideshow').click();}return;}
   if($('#modal').open)return;if(e.key==='/'&&!$('#app').hidden){e.preventDefault();$('#search').focus();}if(e.key==='Escape')closeSidebar();
 }));
 initialize().catch(e=>{ $('#auth').hidden=false;$('#auth-form').innerHTML=`<h1>接続できませんでした。</h1><p class="auth-intro">${esc(e.message)}</p><a class="button primary" href="/">もう一度読み込む</a>`; });
@@ -279,9 +290,9 @@ function renderFolderTree(){
 }
 function makeFolderCard(folder){
   const card=document.createElement('article');card.className='folder-card';card.dataset.dropFolder=folder.path;card.dataset.dragFolder=folder.path;card.draggable=true;
-  card.innerHTML=`<button class="folder-card-open card-visual" data-open-folder="${esc(folder.path)}" aria-label="${esc(folder.name)}を開く">${icon('folder')}<span>フォルダを開く</span></button><div class="card-meta"><strong class="card-name">${esc(folder.name)}</strong><button class="folder-move-menu icon-button" aria-label="${esc(folder.name)}を移動">${icon('more')}</button></div><div class="card-subtitle">${folder.count} 枚（配下を含む）</div>`;
+  card.innerHTML=`<button class="folder-card-open card-visual" data-open-folder="${esc(folder.path)}" aria-label="${esc(folder.name)}を開く">${icon('folder')}<span>フォルダを開く</span></button><div class="card-meta"><strong class="card-name">${esc(folder.name)}</strong><button class="folder-move-menu icon-button" aria-label="${esc(folder.name)}を移動">${icon('more')}</button></div><div class="card-subtitle">${folder.count} 件（配下を含む）</div>`;
   $('.folder-move-menu',card).onclick=()=>{
-    modal('フォルダを移動',`<form id="folder-move-form">${errorBox}<p class="hint">${esc(folder.name)} を移動します。配下の画像とタグも保持します。</p><div class="field"><label for="folder-destination">移動先</label><select id="folder-destination" name="parent">${folderOptions(parentPath(folder.path))}</select></div><button type="submit" class="button primary full-width">移動</button></form>`);
+    modal('フォルダを移動',`<form id="folder-move-form">${errorBox}<p class="hint">${esc(folder.name)} を移動します。配下のファイルとタグも保持します。</p><div class="field"><label for="folder-destination">移動先</label><select id="folder-destination" name="parent">${folderOptions(parentPath(folder.path))}</select></div><button type="submit" class="button primary full-width">移動</button></form>`);
     bindForm($('#folder-move-form'),async d=>{await api('/folders/move','POST',{source:folder.path,parent:d.get('parent')});$('#modal').close();await refreshSummary();await loadImages(true);toast('フォルダを移動しました。');});
   };
   return card;
@@ -295,18 +306,18 @@ $('#upload-input').onchange=safe(async e=>{const files=[...e.target.files];e.tar
 async function uploadFiles(files,folder){
   if(uploading){toast('アップロード完了までお待ちください。');return;}
   if(!files.length)return;
-  if(files.length>200){toast('一度にアップロードできるのは200枚までです。');return;}
+  if(files.length>200){toast('一度にアップロードできるのは200件までです。');return;}
   uploading=true;$('#upload-button').disabled=true;$('#upload-status').hidden=false;
   const failures=[];let succeeded=0;
   try{
     for(let i=0;i<files.length;i++){
       const file=files[i];$('#upload-status').textContent=`アップロード中 ${i+1} / ${files.length}：${file.name}`;
       try{
-        if(file.size>64*1024*1024)throw new Error('1枚64MiBまでです。');
-        if(!/\.(jpe?g|png|webp|gif|avif|bmp|tiff?)$/i.test(file.name))throw new Error('対応していない形式です。');
+        const isVideo=/\.(mp4|m4v|mov|webm)$/i.test(file.name);if(file.size>(isVideo?1024**3:64*1024*1024))throw new Error(isVideo?'動画は1GiBまでです。':'画像は64MiBまでです。');
+        if(!/\.(jpe?g|png|webp|gif|avif|bmp|tiff?|mp4|m4v|mov|webm)$/i.test(file.name))throw new Error('対応していない形式です。');
         await new Promise((resolve,reject)=>{
           const xhr=new XMLHttpRequest();xhr.open('POST','/api/upload?'+new URLSearchParams({folder,name:file.name}));
-          xhr.setRequestHeader('X-Luma-Request','1');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=130000;
+          xhr.setRequestHeader('X-Luma-Request','1');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=610000;
           xhr.upload.onprogress=e=>{if(e.lengthComputable)$('#upload-status').textContent=`${i+1} / ${files.length}：${file.name} (${Math.round(e.loaded/e.total*100)}%)`;};
           xhr.onload=()=>{let response;try{response=JSON.parse(xhr.responseText);}catch{response={};}xhr.status>=200&&xhr.status<300?resolve():reject(new Error(typeof response.detail==='string'?response.detail:'アップロードに失敗しました。'));};
           xhr.onerror=()=>reject(new Error('通信に失敗しました。'));xhr.ontimeout=()=>reject(new Error('タイムアウトしました。'));xhr.send(file);
@@ -314,8 +325,8 @@ async function uploadFiles(files,folder){
       }catch(e){failures.push(`${file.name}：${e.message}`);}
     }
     await refreshSummary();await loadImages(true);
-    $('#upload-status').textContent=`${succeeded}枚をアップロードしました。${failures.length?` ${failures.length}枚は失敗しました。`:''}`;
-    if(failures.length){modal('アップロード結果',`<p>${succeeded}枚を保存、${failures.length}枚は保存できませんでした。</p><ul class="upload-errors">${failures.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`);}else{toast(`${succeeded}枚をアップロードしました。`);}
+    $('#upload-status').textContent=`${succeeded}件をアップロードしました。${failures.length?` ${failures.length}件は失敗しました。`:''}`;
+    if(failures.length){modal('アップロード結果',`<p>${succeeded}件を保存、${failures.length}件は保存できませんでした。</p><ul class="upload-errors">${failures.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`);}else{toast(`${succeeded}件をアップロードしました。`);}
   }finally{uploading=false;$('#upload-button').disabled=false;}
 }
 document.addEventListener('dragstart',e=>{
@@ -347,12 +358,22 @@ document.addEventListener('drop',safe(async e=>{
   const files=[...e.dataTransfer.files];
   const containsDirectory=[...e.dataTransfer.items].some(item=>item.webkitGetAsEntry?.()?.isDirectory);
   clearDrag();
-  if(external){if(containsDirectory){toast('ブラウザへの追加は画像ファイルを選択してください。フォルダごとの追加は公開用フォルダへコピーできます。');return;}await uploadFiles(files,destination);return;}
+  if(external){if(containsDirectory){toast('ブラウザへの追加は画像・動画ファイルを選択してください。フォルダごとの追加は公開用フォルダへコピーできます。');return;}await uploadFiles(files,destination);return;}
   if(!target)return;
   if(payload.folder){const result=await api('/folders/move','POST',{source:payload.folder,parent:destination});if(state.folder===payload.folder||state.folder?.startsWith(payload.folder+'/'))state.folder=result.path+state.folder.slice(payload.folder.length);toast('フォルダを移動しました。');}
   else{
     const result=await api('/batch','POST',{ids:payload.ids,folder:destination});const failures=result.results.filter(r=>!r.ok);
-    state.selected=new Set(failures.map(r=>r.id));state.selecting=failures.length>0;updateSelection();toast(failures.length?`${failures.length}枚を移動できませんでした。${failures[0].error}`:`${result.results.length}枚を移動しました。`);
+    state.selected=new Set(failures.map(r=>r.id));state.selecting=failures.length>0;updateSelection();toast(failures.length?`${failures.length}件を移動できませんでした。${failures[0].error}`:`${result.results.length}件を移動しました。`);
   }
   updateHeading();await refreshSummary();await loadImages(true);
 }));
+
+function durationLabel(value){const seconds=Math.max(0,Math.round(value||0));return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;}
+function stopVideo(){const player=$('#viewer-video');player.pause();player.removeAttribute('src');player.removeAttribute('poster');player.load();}
+function renderBreadcrumb(){
+  const parts=(state.folder||'').split('/').filter(Boolean);
+  $('#breadcrumb').innerHTML=`<button data-breadcrumb="" ${parts.length?'':'aria-current="location"'}>ライブラリ</button>`+parts.map((name,index)=>`<span class="path-separator" aria-hidden="true">/</span><button data-breadcrumb="${esc(parts.slice(0,index+1).join('/'))}" ${index===parts.length-1?'aria-current="location"':''}>${esc(name)}</button>`).join('');
+  $('#breadcrumb').title=['ライブラリ',...parts].join(' / ');
+  $('#breadcrumb').scrollLeft=$('#breadcrumb').scrollWidth;
+}
+$('#breadcrumb').onclick=safe(e=>{const button=e.target.closest('[data-breadcrumb]');if(button)return changeView(state.view,button.dataset.breadcrumb);});

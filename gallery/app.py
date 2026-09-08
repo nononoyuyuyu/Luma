@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from .library import Library, LibraryError, valid_name, EXTENSIONS
+from . import video
 from .security import LoginLimiter, address, allowed, networks, password_hash, password_matches, token_hash
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -143,7 +144,7 @@ def create_app(data_dir=None, public_dir=None, start_scanner=True):
                     user(request)
                 except HTTPException as exc:
                     return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
-            body_limit = 64 * 1024 * 1024 if is_upload else 65536
+            body_limit = (1024 ** 3 if Path(request.query_params.get('name', '')).suffix.lower() in video.EXTENSIONS else 64 * 1024 * 1024) if is_upload else 65536
             try:
                 if int(request.headers.get('content-length', '0')) > body_limit:
                     return JSONResponse({'detail': 'リクエストが大きすぎます。'}, status_code=413)
@@ -369,7 +370,7 @@ def create_app(data_dir=None, public_dir=None, start_scanner=True):
                      folder: str = Query('', max_length=1000), current=Depends(user)):
         valid_name(name)
         if Path(name).suffix.lower() not in EXTENSIONS:
-            raise HTTPException(422, '対応している画像ファイルを選択してください。')
+            raise HTTPException(422, '対応している画像・動画ファイルを選択してください。')
         if not library.path(folder).is_dir():
             raise LibraryError('アップロード先のフォルダが見つかりません。')
         if not upload_slots.acquire(blocking=False):
@@ -379,11 +380,11 @@ def create_app(data_dir=None, public_dir=None, start_scanner=True):
             with tempfile.NamedTemporaryFile(dir=library.data_dir, prefix='upload-', suffix='.tmp', delete=False) as output:
                 temporary = Path(output.name)
                 size = 0
-                async with asyncio.timeout(120):
+                async with asyncio.timeout(600):
                     async for chunk in request.stream():
                         size += len(chunk)
-                        if size > 64 * 1024 * 1024:
-                            raise HTTPException(413, '画像は1枚64MiBまでです。')
+                        if size > (1024 ** 3 if Path(name).suffix.lower() in video.EXTENSIONS else 64 * 1024 * 1024):
+                            raise HTTPException(413, '画像は64MiB、動画は1GiBまでです。')
                         await run_in_threadpool(output.write, chunk)
                 await run_in_threadpool(output.flush)
                 await run_in_threadpool(os.fsync, output.fileno())
@@ -432,7 +433,7 @@ def create_app(data_dir=None, public_dir=None, start_scanner=True):
                         existing = {r[0] for r in db.execute('SELECT tag FROM tags WHERE image_id=?', (image_id,))}
                     tags = sorted((existing - set(remove)) | set(add))
                     if len(tags) > 30:
-                        raise LibraryError('タグは画像1枚につき30個までです。')
+                        raise LibraryError('タグは1ファイルにつき30個までです。')
                     edit_image(image_id, EditImage(folder=body.folder, tags=tags, favorite=body.favorite), current)
                 results.append({'id': image_id, 'ok': True})
             except (LibraryError, OSError) as exc:
@@ -446,17 +447,22 @@ def create_app(data_dir=None, public_dir=None, start_scanner=True):
             try:
                 path = library.derivative(row, kind)
             except (ValueError, *ImageErrorTypes) as exc:
-                raise HTTPException(422, '画像をデコードできません。') from exc
+                raise HTTPException(422, 'プレビューを生成できません。') from exc
             return FileResponse(path, media_type='image/webp')
         if kind in {'original', 'download'}:
             with library.lock:
                 path = library.path(row['path'])
-                # Validate content again; filenames and old database formats are not proof.
-                from PIL import Image
-                from .library import FORMATS
-                with Image.open(path, formats=list(FORMATS)) as im:
-                    fmt = im.format
-                mime = {'JPEG': 'image/jpeg', 'PNG': 'image/png', 'GIF': 'image/gif', 'WEBP': 'image/webp', 'AVIF': 'image/avif', 'BMP': 'image/bmp', 'TIFF': 'image/tiff'}[fmt]
+                if row.get('kind') == 'video':
+                    info = path.stat()
+                    if info.st_size != row['size'] or info.st_mtime_ns != row['mtime_ns']:
+                        raise HTTPException(409, '動画が変更されました。再スキャンしてください。')
+                    mime = 'video/webm' if row['format'] == 'WEBM' else 'video/mp4'
+                else:
+                    from PIL import Image
+                    from .library import FORMATS
+                    with Image.open(path, formats=list(FORMATS)) as im:
+                        fmt = im.format
+                    mime = {'JPEG': 'image/jpeg', 'PNG': 'image/png', 'GIF': 'image/gif', 'WEBP': 'image/webp', 'AVIF': 'image/avif', 'BMP': 'image/bmp', 'TIFF': 'image/tiff'}[fmt]
             return FileResponse(path, media_type=mime, filename=row['name'], content_disposition_type='attachment' if kind == 'download' else 'inline')
         raise HTTPException(404, '見つかりません。')
 

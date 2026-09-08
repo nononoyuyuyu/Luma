@@ -13,9 +13,10 @@ import warnings
 from pathlib import Path
 
 from PIL import Image, ImageOps
+from . import video
 
 log = logging.getLogger(__name__)
-EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp', '.tif', '.tiff'}
+EXTENSIONS = video.EXTENSIONS | {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp', '.tif', '.tiff'}
 FORMATS = {'JPEG', 'PNG', 'WEBP', 'GIF', 'AVIF', 'BMP', 'TIFF'}
 Image.MAX_IMAGE_PIXELS = 80_000_000
 warnings.simplefilter('error', Image.DecompressionBombWarning)
@@ -76,6 +77,11 @@ class Library:
                 CREATE TABLE IF NOT EXISTS folder_moves (id TEXT PRIMARY KEY, source TEXT NOT NULL,
                     destination TEXT NOT NULL, identity TEXT NOT NULL, status TEXT NOT NULL);
             ''')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(images)')}
+            for name, declaration in [('kind', "TEXT NOT NULL DEFAULT 'image'"), ('duration', 'REAL NOT NULL DEFAULT 0'), ('video_codec', "TEXT NOT NULL DEFAULT ''")]:
+                if name not in columns:
+                    db.execute(f'ALTER TABLE images ADD COLUMN {name} {declaration}')
+
 
     @contextlib.contextmanager
     def db(self):
@@ -247,12 +253,8 @@ class Library:
                                     candidates = [r for r in candidates if not self.path(r['path'], False).exists() and r['size'] == info.st_size and r['mtime_ns'] == info.st_mtime_ns]
                                     if len(candidates) == 1:
                                         row = candidates[0]
-                                with Image.open(p, formats=list(FORMATS)) as im:
-                                    width, height = im.size
-                                    if im.getexif().get(274) in {5, 6, 7, 8}:
-                                        width, height = height, width
-                                    fmt = im.format
-                                    animated = int(getattr(im, 'is_animated', False))
+                                meta = self.metadata(p)
+                                width, height, fmt, animated = (meta[k] for k in ('width', 'height', 'format', 'animated'))
                                 # A file that changed while reading must be retried.
                                 end = p.stat()
                                 if (end.st_size, end.st_mtime_ns) != (info.st_size, info.st_mtime_ns):
@@ -263,6 +265,7 @@ class Library:
                                     db.execute('UPDATE images SET path=?,folder=?,name=?,size=?,mtime_ns=?,identity=?,width=?,height=?,format=?,animated=?,available=1 WHERE id=?', (*values, row['id']))
                                 else:
                                     db.execute('INSERT INTO images(id,path,folder,name,size,mtime_ns,identity,width,height,format,animated,added) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', (uuid.uuid4().hex, *values, time.time()))
+                                db.execute('UPDATE images SET kind=?,duration=?,video_codec=? WHERE path=?', (meta['kind'], meta['duration'], meta['video_codec'], relative))
                             self.scan_state['revision'] += 1
                             seen.add(relative)
                             self.scan_state['processed'] += 1
@@ -329,7 +332,7 @@ class Library:
             with self.render_slots:
                 with self.lock:
                     source = self.path(row['path'])
-                    opened = Image.open(source, formats=list(FORMATS))
+                    opened = video.inspect(source, thumbnail=True) if row.get('kind') == 'video' else Image.open(source, formats=list(FORMATS))
                 with opened as im:
                     limit = 480 if kind == 'thumb' else 2560
                     im.draft('RGB', (limit, limit))
@@ -404,16 +407,10 @@ class Library:
     def import_image(self, temporary, folder, name):
         """Validate before atomic publication; never overwrite an existing file."""
         try:
-            with Image.open(temporary, formats=list(FORMATS)) as im:
-                im.verify()
-            with Image.open(temporary, formats=list(FORMATS)) as im:
-                im.load()
-                width, height = im.size
-                if im.getexif().get(274) in {5, 6, 7, 8}:
-                    width, height = height, width
-                fmt, animated = im.format, int(getattr(im, 'is_animated', False))
+            meta = self.metadata(temporary, name=name, validate=True)
+            width, height, fmt, animated = (meta[k] for k in ('width', 'height', 'format', 'animated'))
         except (OSError, ValueError, Image.DecompressionBombWarning, Image.DecompressionBombError) as exc:
-            raise LibraryError('有効な画像として読み込めません。形式・破損・画素数を確認してください。') from exc
+            raise LibraryError('有効な画像・動画として読み込めません。形式・破損・画素数を確認してください。') from exc
         with self.lock:
             valid_name(name)
             parent = self.path(folder)
@@ -436,5 +433,26 @@ class Library:
                     db.execute('UPDATE images SET path=?,available=0 WHERE id=?', (f'__luma_missing__/{old["id"]}/{name}', old['id']))
                 db.execute('INSERT INTO images(id,path,folder,name,size,mtime_ns,identity,width,height,format,animated,added) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                            (image_id, relative, folder, name, info.st_size, info.st_mtime_ns, f'{info.st_dev}:{info.st_ino}', width, height, fmt, animated, time.time()))
+                db.execute('UPDATE images SET kind=?,duration=?,video_codec=? WHERE id=?', (meta['kind'], meta['duration'], meta['video_codec'], image_id))
             self.scan_state['revision'] += 1
             return {'id': image_id, 'name': name, 'folder': folder}
+
+    @staticmethod
+    def metadata(path, name=None, validate=False):
+        if Path(name or path).suffix.lower() in video.EXTENSIONS:
+            meta = video.inspect(path)
+            if validate:
+                with video.inspect(path, thumbnail=True):
+                    pass
+            return meta
+        if validate:
+            with Image.open(path, formats=list(FORMATS)) as im:
+                im.verify()
+        with Image.open(path, formats=list(FORMATS)) as im:
+            if validate:
+                im.load()
+            width, height = im.size
+            if im.getexif().get(274) in {5, 6, 7, 8}:
+                width, height = height, width
+            return {'width': width, 'height': height, 'format': im.format, 'animated': int(getattr(im, 'is_animated', False)),
+                    'kind': 'image', 'duration': 0, 'video_codec': ''}

@@ -171,7 +171,7 @@ def main():
             phone.locator('#close-viewer').click()
             # Mobile file picker uploads to the open folder and updates immediately.
             phone.locator('#upload-input').set_input_files({'name':'mobile-upload.png','mimeType':'image/png','buffer':make_upload()})
-            expect(phone.locator('#upload-status')).to_contain_text('1枚をアップロードしました')
+            expect(phone.locator('#upload-status')).to_contain_text('1件をアップロードしました')
             expect(phone.locator('.image-card')).to_have_count(3)
             assert (public/'UIから作成/mobile-upload.png').is_file()
 
@@ -180,7 +180,7 @@ def main():
             expect(page.locator('.image-card')).to_have_count(4)
             transfer=page.evaluate_handle('(bytes) => { const dt=new DataTransfer();dt.items.add(new File([new Uint8Array(bytes)],"desktop-upload.png",{type:"image/png"}));return dt; }',list(make_upload()))
             page.locator('#gallery').dispatch_event('drop',{'dataTransfer':transfer})
-            expect(page.locator('#upload-status')).to_contain_text('1枚をアップロードしました')
+            expect(page.locator('#upload-status')).to_contain_text('1件をアップロードしました')
             expect(page.locator('.image-card')).to_have_count(5)
             page.locator('.image-card').filter(has=page.locator('[title="desktop-upload.png"]')).drag_to(page.locator('.folder-card[data-drop-folder="Artwork"]'))
             expect(page.locator('.image-card')).to_have_count(4)
@@ -203,13 +203,52 @@ def main():
             assert page.locator('#modal-body').evaluate('(el)=>el.scrollWidth<=el.clientWidth')
             page.screenshot(path=str(root/'settings-desktop.png'))
             page.locator('#close-modal').click()
+            # Nested breadcrumbs and real native video playback use synthetic files only.
+            page.locator('#folder-nav [data-folder="Artwork/Travel"]').click()
+            expect(page.locator('#breadcrumb')).to_have_text('ライブラリ/Artwork/Travel')
+            page.screenshot(path=str(root/'breadcrumb-desktop.png'))
+            page.locator('#breadcrumb [data-breadcrumb="Artwork"]').click()
+            expect(page.locator('#breadcrumb [aria-current="location"]')).to_have_text('Artwork')
+            page.locator('#breadcrumb [data-breadcrumb=""]').click()
+            from test_video import make_video
+            make_video(public/'clip.mp4')
+            app.state.library.scan()
+            page.reload()
+            page.locator('.image-card').filter(has=page.locator('[title="clip.mp4"]')).locator('.card-open').click()
+            player=page.locator('#viewer-video')
+            expect(player).to_be_visible()
+            expect(page.locator('#viewer-loading')).to_be_hidden()
+            assert player.evaluate('(v)=>v.duration') == 3
+            player.evaluate('(v)=>v.play()')
+            expect(player).to_have_js_property('paused',False)
+            player.evaluate('(v)=>{v.pause();v.currentTime=1.5;}')
+            expect(player).to_have_js_property('seeking',False)
+            assert abs(player.evaluate('(v)=>v.currentTime')-1.5)<.1
+            page.screenshot(path=str(root/'video-desktop.png'))
+            page.locator('#close-viewer').click()
+            expect(player).to_have_js_property('paused',True)
+            assert player.get_attribute('src') is None
+            phone.reload()
+            phone.locator('#menu-button').click()
+            phone.locator('#folder-nav [data-folder="Artwork/Travel"]').click()
+            expect(phone.locator('#breadcrumb')).to_have_text('ライブラリ/Artwork/Travel')
+            assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            expect(phone.locator('#sidebar')).not_to_have_class('sidebar open')
+            phone.screenshot(path=str(root/'breadcrumb-mobile.png'),animations='disabled')
+            phone.locator('#breadcrumb [data-breadcrumb=""]').click()
+            phone.locator('.image-card').filter(has=phone.locator('[title="clip.mp4"]')).locator('.card-open').click()
+            expect(phone.locator('#viewer-loading')).to_be_hidden()
+            phone.locator('#viewer-video').evaluate('(v)=>v.play()')
+            expect(phone.locator('#viewer-video')).to_have_js_property('paused',False)
+            phone.screenshot(path=str(root/'video-mobile.png'))
+            phone.locator('#close-viewer').click()
             phone.locator('#menu-button').click()
             phone.locator('#logout').click()
             expect(phone.locator('#username')).to_be_visible()
             phone.screenshot(path=str(root/'login-mobile.png'),full_page=True)
             assert not errors, errors
             browser.close()
-        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','logout']}
+        report={'result':'PASS','screenshots':str(root),'browser_errors':errors,'checks':['desktop setup/login','folder-scoped thumbnail decodes','keyboard navigation','zoom','rename and tags','search','folder creation','batch filesystem move','IP settings','mobile 390px no overflow','mobile folder navigation','touch swipe','two-finger pinch','mobile edit panel','mobile upload','desktop file drop','image drag move','folder drag move','nested folder collapse','whole tree collapse','contained settings scrollbar','nested desktop/mobile breadcrumbs','MP4 playback and seek','video close stops playback','logout']}
         (root/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps(report,ensure_ascii=True))
     finally:
